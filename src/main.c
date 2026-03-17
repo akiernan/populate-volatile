@@ -340,34 +340,14 @@ int main(int argc, char *argv[])
 		process_cfgfile(&ctx, cfgfd, names[core_idx], 1 /* skip_reqs */);
 
 	/* ----------------------------------------------------------------
-	 * Step 2: collect all non-core entries for bulk validation.
-	 * Fast path: if all requirements pass, apply them all at once.
-	 * Slow path: apply each file individually, skipping bad ones.
+	 * Step 2: apply each non-core file individually.
+	 * Files whose users/groups don't exist are skipped.
 	 * -------------------------------------------------------------- */
-	entry_list_t all = {NULL, 0, 0};
-
 	for (int i = 0; i < nnames; i++) {
 		if (i == core_idx)
 			continue;
-		if (pv_parse_config(cfgfd, names[i], collect_cb, &all) == -1)
-			warnx("error reading %s (skipping)", names[i]);
+		process_cfgfile(&ctx, cfgfd, names[i], 0);
 	}
-
-	if (pv_check_requirements(all.data, all.len) == 0) {
-		/* Fast path */
-		for (size_t i = 0; i < all.len; i++)
-			pv_apply_entry(&ctx, &all.data[i]);
-	} else {
-		/* Slow path */
-		warnx("requirement check failed; processing files individually");
-		for (int i = 0; i < nnames; i++) {
-			if (i == core_idx)
-				continue;
-			process_cfgfile(&ctx, cfgfd, names[i], 0);
-		}
-	}
-
-	entry_list_free(&all);
 
 	/* Free discovered names (not freed when explicit_files used) */
 	for (int i = 0; i < nnames; i++)
