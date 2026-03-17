@@ -7,7 +7,9 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <limits.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,10 +32,25 @@
 static char    tmpbase[PATH_MAX];
 static int     tmpfd = -1;
 static pv_ctx_t ctx;
+static char    test_user[LOGIN_NAME_MAX];
+static char    test_group[LOGIN_NAME_MAX];
 
 void setUp(void)
 {
 	pv_saved_umask = umask(0);
+
+	/* Resolve current uid/gid to names so chown() succeeds without root. */
+	if (test_user[0] == '\0') {
+		struct passwd *pw = getpwuid(getuid());
+		if (pw == NULL)
+			err(1, "getpwuid");
+		strncpy(test_user, pw->pw_name, sizeof(test_user) - 1);
+
+		struct group *gr = getgrgid(getgid());
+		if (gr == NULL)
+			err(1, "getgrgid");
+		strncpy(test_group, gr->gr_name, sizeof(test_group) - 1);
+	}
 
 	snprintf(tmpbase, sizeof(tmpbase), "/tmp/pv_ops_test_XXXXXX");
 	if (mkdtemp(tmpbase) == NULL)
@@ -86,7 +103,7 @@ static pv_entry_t make_entry(pv_type_t type, const char *user,
 
 static void test_create_file_empty(void)
 {
-	pv_entry_t e = make_entry(PV_TYPE_FILE, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/newfile", NULL);
 	int r = pv_create_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -111,7 +128,7 @@ static void test_create_file_copy_source(void)
 	 * leading '/' and opens it relative to ctx->rootfd, so "/source.txt"
 	 * resolves to <rootdir>/source.txt — which is where we created it.
 	 */
-	pv_entry_t e = make_entry(PV_TYPE_FILE, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/dest.txt", "/source.txt");
 	int r = pv_create_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -133,7 +150,7 @@ static void test_create_file_skips_existing(void)
 	write(fd, "original", 8);
 	close(fd);
 
-	pv_entry_t e = make_entry(PV_TYPE_FILE, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/exists", NULL);
 	int r = pv_create_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -153,7 +170,7 @@ static void test_create_file_dry_run(void)
 	dry_ctx.dry_run = 1;
 	dry_ctx.verbose = 1;
 
-	pv_entry_t e = make_entry(PV_TYPE_FILE, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/dryfile", NULL);
 	int r = pv_create_file(&dry_ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -170,7 +187,7 @@ static void test_create_file_dry_run(void)
 
 static void test_mkdir_creates_dir(void)
 {
-	pv_entry_t e = make_entry(PV_TYPE_DIR, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_DIR, test_user, test_group,
 	                           0755, "/mydir", NULL);
 	int r = pv_mkdir(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -183,7 +200,7 @@ static void test_mkdir_creates_dir(void)
 
 static void test_mkdir_creates_deep(void)
 {
-	pv_entry_t e = make_entry(PV_TYPE_DIR, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_DIR, test_user, test_group,
 	                           0700, "/deep/nested/dir", NULL);
 	int r = pv_mkdir(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -197,7 +214,7 @@ static void test_mkdir_skips_existing(void)
 {
 	mkdirat(tmpfd, "prexist", 0700);
 
-	pv_entry_t e = make_entry(PV_TYPE_DIR, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_DIR, test_user, test_group,
 	                           0755, "/prexist", NULL);
 	int r = pv_mkdir(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -214,7 +231,7 @@ static void test_mkdir_dry_run(void)
 	dry_ctx.dry_run = 1;
 	dry_ctx.verbose = 1;
 
-	pv_entry_t e = make_entry(PV_TYPE_DIR, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_DIR, test_user, test_group,
 	                           0755, "/drydir", NULL);
 	int r = pv_mkdir(&dry_ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -233,7 +250,7 @@ static void test_link_file_create_new(void)
 	/* Ensure parent directory of name exists */
 	pv_mkdirtree(tmpfd, "var", 0755);
 
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/var/run", "/var/volatile/run");
 	int r = pv_link_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -254,7 +271,7 @@ static void test_link_file_correct_existing(void)
 	pv_mkdirtree(tmpfd, "var", 0755);
 	symlinkat("/var/volatile/log", tmpfd, "var/log");
 
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/var/log", "/var/volatile/log");
 	int r = pv_link_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -271,7 +288,7 @@ static void test_link_file_wrong_existing(void)
 	pv_mkdirtree(tmpfd, "var", 0755);
 	symlinkat("/wrong/target", tmpfd, "var/log");
 
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/var/log", "/var/volatile/log");
 	int r = pv_link_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -297,7 +314,7 @@ static void test_link_file_migrate_directory(void)
 	/* Ensure the target volatile directory exists */
 	pv_mkdirtree(tmpfd, "var/volatile/log", 0755);
 
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/var/log", "/var/volatile/log");
 	int r = pv_link_file(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -321,7 +338,7 @@ static void test_link_file_dry_run_new(void)
 
 	pv_mkdirtree(tmpfd, "var", 0755);
 
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/var/run", "/var/volatile/run");
 	int r = pv_link_file(&dry_ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -343,7 +360,7 @@ static void test_link_file_dry_run_migrate(void)
 	close(fd);
 	pv_mkdirtree(tmpfd, "var/volatile/log", 0755);
 
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/var/log", "/var/volatile/log");
 	int r = pv_link_file(&dry_ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -360,7 +377,7 @@ static void test_link_file_dry_run_migrate(void)
 
 static void test_apply_entry_dispatches_file(void)
 {
-	pv_entry_t e = make_entry(PV_TYPE_FILE, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/dispatch_file", NULL);
 	int r = pv_apply_entry(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -373,7 +390,7 @@ static void test_apply_entry_dispatches_file(void)
 
 static void test_apply_entry_dispatches_dir(void)
 {
-	pv_entry_t e = make_entry(PV_TYPE_DIR, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_DIR, test_user, test_group,
 	                           0755, "/dispatch_dir", NULL);
 	int r = pv_apply_entry(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -387,7 +404,7 @@ static void test_apply_entry_dispatches_dir(void)
 static void test_apply_entry_dispatches_link(void)
 {
 	pv_mkdirtree(tmpfd, "lnkdir", 0755);
-	pv_entry_t e = make_entry(PV_TYPE_LINK, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
 	                           0755, "/lnkdir/run", "/lnkdir/volatile/run");
 	int r = pv_apply_entry(&ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
@@ -412,7 +429,7 @@ static void test_apply_entry_follows_symlink_for_file(void)
 	symlinkat("actual_dir", tmpfd, "real"); /* /real -> actual_dir (relative) */
 
 	/* The config says to create /real/file, but /real is a symlink */
-	pv_entry_t e = make_entry(PV_TYPE_FILE, "root", "root",
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/real/target_file", NULL);
 	/* We need parent to exist - real/target_file -> actual_dir/target_file */
 	/* Since /real is a symlink to actual_dir, the kernel follows it */
