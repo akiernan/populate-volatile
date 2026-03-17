@@ -133,7 +133,7 @@ static int apply_meta(const pv_ctx_t *ctx, const char *relpath,
 	int r = 0;
 
 	if (fchownat(ctx->rootfd, relpath, uid, gid, AT_SYMLINK_NOFOLLOW) == -1) {
-		warn("chown %s:%s %s", "", "", relpath); /* names already resolved */
+		warn("chown %u:%u %s", (unsigned)uid, (unsigned)gid, relpath);
 		if (!ctx->rootfs_mode)
 			r = -1;
 	}
