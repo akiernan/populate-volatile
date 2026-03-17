@@ -1,0 +1,61 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Build
+
+```sh
+# First-time setup
+meson setup build
+
+# Compile
+meson compile -C build
+
+# Run all tests
+meson test -C build --print-errorlogs
+
+# Run a single test
+meson test -C build --print-errorlogs config   # or path / validate / ops
+```
+
+Docker convenience wrapper (runs build + tests inside Ubuntu 24.04):
+
+```sh
+./docker-build.sh           # glibc
+./docker-build.sh musl      # musl via musl-gcc
+./docker-build.sh all       # both
+```
+
+## Architecture
+
+`populate-volatile` reads declarative config files from `/etc/default/volatiles/` (one entry per line: `TYPE USER GROUP MODE NAME LTARGET`) and creates the described files, directories, symlinks, or bind-mounts on a tmpfs/ramfs at boot, or stages them into a rootfs image at build time (via `-r <rootdir>`, run under [pseudo](https://git.yoctoproject.org/pseudo)).
+
+### Processing order
+
+1. `00_core` is applied first, unconditionally and without user/group validation, because it creates `/var/volatile/tmp` which the requirement checker needs.
+2. All remaining config files are bulk-validated (`pv_check_requirements`). If all pass, entries are applied in one pass (fast path). If any fail, each file is retried individually and bad ones are skipped (slow path).
+
+### Library (`libpv`, static)
+
+| File | Responsibility |
+|---|---|
+| `lib/config.c` | Line parser (`pv_parse_line`) and file reader (`pv_parse_config`) using a callback |
+| `lib/ops.c` | Filesystem operations: `pv_create_file`, `pv_mkdir`, `pv_link_file`, `pv_bind_mount`, `pv_apply_entry` dispatcher |
+| `lib/validate.c` | `pv_check_requirements` — resolves users/groups via `getpwnam`/`getgrnam` |
+| `lib/path.c` | Path utilities used by ops |
+
+All ops receive a `pv_ctx_t` (rootfd, rootdir, verbose, dry_run, rootfs_mode).
+
+### Key types (`include/pv/`)
+
+- `pv_entry_t` — one parsed config record (type, user, group, mode, name, ltarget)
+- `pv_ctx_t` — operation context threaded through all ops functions
+- `pv_entry_cb` — callback signature used by `pv_parse_config`
+
+### Tests
+
+Unity 2.5.2 is vendored in `tests/unity/` under the MIT license (see `tests/unity/unity.h`). The four test executables (`test_config`, `test_path`, `test_validate`, `test_ops`) are built and registered with `meson test`. Bind-mount tests require `CAP_SYS_ADMIN` and are outside the Unity suite.
+
+## Licensing
+
+This project is **GPL-2.0-only** (`LICENSE.txt`). The vendored Unity test framework (`tests/unity/`) is licensed separately under the **MIT license** — see the header in `tests/unity/unity.h`.
