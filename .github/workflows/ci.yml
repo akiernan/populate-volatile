@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-2.0-only
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc + glibc
+            cc: gcc
+            packages: ""
+          - name: gcc + musl
+            cc: musl-gcc
+            packages: musl-tools
+          - name: clang + glibc
+            cc: clang
+            packages: clang
+
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            meson ninja-build ${{ matrix.packages }}
+
+      - name: Configure
+        run: CC=${{ matrix.cc }} meson setup build -Dc_std=c99 -Dwarning_level=2
+
+      - name: Build
+        run: meson compile -C build
+
+      - name: Test
+        run: meson test -C build --print-errorlogs
