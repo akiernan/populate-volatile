@@ -37,12 +37,15 @@ populate-volatile [-v] [-n] [-r <rootdir>] [-C <cfgdir>] [<cfgfile> ...]
 
 ## Building
 
-Requires meson + ninja and a C99 compiler with glibc or musl. Use the provided Docker wrapper for a reproducible build:
+Requires meson + ninja and a C99 compiler (gcc or clang) with glibc or musl.
+
+A Docker wrapper runs the full build matrix inside Ubuntu 24.04:
 
 ```sh
-./docker-build.sh           # glibc build + tests (Ubuntu 24.04)
-./docker-build.sh musl      # musl build + tests
-./docker-build.sh all       # both
+./docker-build.sh            # gcc + glibc
+./docker-build.sh musl       # gcc + musl
+./docker-build.sh clang      # clang + glibc
+./docker-build.sh all        # all three
 ```
 
 Native Linux build:
@@ -52,6 +55,8 @@ meson setup build
 meson compile -C build
 meson test -C build --print-errorlogs
 ```
+
+CI runs the same three-way matrix on every push via GitHub Actions.
 
 ## License
 
