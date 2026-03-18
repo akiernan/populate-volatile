@@ -211,21 +211,24 @@ static int process_cfgfile(const pv_ctx_t *ctx, int cfgfd,
 		printf("Applying %s\n", name);
 
 	if (!skip_reqs) {
-		/* Collect entries first, validate, then apply */
+		/* Collect all entries, then apply each one individually
+		 * after checking its own user/group requirements.
+		 * This matches the shell script's behaviour of skipping
+		 * individual bad entries rather than the whole file. */
 		entry_list_t list = {NULL, 0, 0};
 
 		if (pv_parse_config(cfgfd, name, collect_cb, &list) == -1) {
 			entry_list_free(&list);
 			return 0; /* I/O error already warned */
 		}
-		if (pv_check_requirements(list.data, list.len) != 0) {
-			warnx("Skipping %s (undefined users/groups)", name);
-			entry_list_free(&list);
-			return 1;
-		}
-		/* Apply the collected entries */
-		for (size_t i = 0; i < list.len; i++)
+		for (size_t i = 0; i < list.len; i++) {
+			if (pv_check_requirements(&list.data[i], 1) != 0) {
+				warnx("Skipping %s %s (undefined user/group)",
+				      name, list.data[i].name);
+				continue;
+			}
 			pv_apply_entry(ctx, &list.data[i]);
+		}
 		entry_list_free(&list);
 	} else {
 		pv_parse_config(cfgfd, name, apply_cb, (void *)ctx);

@@ -199,8 +199,14 @@ static int full_path(const pv_ctx_t *ctx, const char *name,
 		warnx("full_path: name must be absolute: %s", name);
 		return -1;
 	}
-	/* rootdir ends without trailing slash (normalised in main) */
-	n = snprintf(buf, bufsz, "%s%s", ctx->rootdir, name);
+	/*
+	 * rootdir ends without trailing slash (normalised in main).
+	 * When rootdir is "/" itself, omit it to avoid "//tmp".
+	 */
+	if (strcmp(ctx->rootdir, "/") == 0)
+		n = snprintf(buf, bufsz, "%s", name);
+	else
+		n = snprintf(buf, bufsz, "%s%s", ctx->rootdir, name);
 	if (n < 0 || (size_t)n >= bufsz) {
 		warnx("full_path: path too long: %s%s", ctx->rootdir, name);
 		return -1;
