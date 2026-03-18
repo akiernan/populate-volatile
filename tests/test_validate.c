@@ -2,10 +2,7 @@
 /*
  * Tests for pv_user_exists, pv_group_exists, pv_check_requirements.
  *
- * All three functions now use getpwnam_r / getgrnam_r, so tests run against
- * the real NSS database of the current process.  At rootfs build time this
- * is the target's database (pseudo sets PSEUDO_PASSWD); at runtime and in
- * CI it is the host/container's database.
+ * Tests run against the real NSS database of the current process.
  *
  * We only rely on names that are guaranteed to exist in any Linux environment:
  *   user  "root"   (uid 0)

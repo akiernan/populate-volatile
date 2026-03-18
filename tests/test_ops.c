@@ -22,11 +22,10 @@
 
 /*
  * All tests operate inside a temporary directory (tmpbase / tmpfd).
- * A synthetic etc/passwd and etc/group are created so resolve_ids() works.
  * ctx.rootdir points to tmpbase; ctx.rootfd = tmpfd.
  *
- * We use uid/gid of the current process so chown() succeeds without root.
- * The synthetic passwd/group files use the actual runtime uid/gid.
+ * We resolve the current process's uid/gid to names via getpwuid/getgrgid
+ * and use those throughout so that chown() succeeds without root privileges.
  */
 
 static char    tmpbase[PATH_MAX];
