@@ -334,6 +334,7 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	}
 
 	if (pv_mkdirtree(ctx->rootfd, relname, entry->mode) == -1) {
+		warn("mkdirtree: %s", entry->name);
 		if (!ctx->rootfs_mode)
 			return -1;
 		return 0;
@@ -423,15 +424,20 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			return 0;
 		}
 
-		/* Ensure target directory exists */
+		/*
+		 * Ensure target directory exists.  This can fail when the
+		 * target path itself is a symlink to a not-yet-existing
+		 * directory (e.g. /var/tmp -> /var/volatile/tmp where
+		 * /var/volatile is a tmpfs that is still being populated).
+		 * In that case, skip the content copy — the directory is
+		 * likely empty anyway — and fall through to create the
+		 * symlink, which is the critical step.
+		 */
 		const char *reltgt = entry->ltarget[0] == '/'
 		                     ? entry->ltarget + 1
 		                     : entry->ltarget;
-		if (pv_mkdirtree(ctx->rootfd, reltgt, 0755) == -1)
-			return -1;
-
-		if (exec_cp_a(fullname, fulltgt) == -1)
-			return -1;
+		if (pv_mkdirtree(ctx->rootfd, reltgt, 0755) == 0)
+			exec_cp_a(fullname, fulltgt);
 
 		if (pv_rmtree(ctx->rootfd, relname) == -1)
 			return -1;

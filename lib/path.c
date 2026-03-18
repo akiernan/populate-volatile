@@ -94,7 +94,6 @@ int pv_mkdirtree_fd(int dirfd, const char *path, mode_t mode)
 		newfd = openat(fd, p, O_RDONLY | O_DIRECTORY);
 		close(fd);
 		if (newfd == -1) {
-			warn("openat: %s", p);
 			free(buf);
 			return -1;
 		}
