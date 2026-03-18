@@ -24,7 +24,6 @@
 
 #include <dirent.h>
 #include <err.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -323,7 +322,7 @@ int main(int argc, char *argv[])
 		/* No 00_core special case when files are explicitly listed */
 		for (int i = 0; i < nnames; i++)
 			process_cfgfile(&ctx, cfgfd, names[i], 0);
-		goto post_process;
+		goto done;
 	}
 
 	nnames = discover_cfgfiles(cfgfd, &names);
@@ -359,30 +358,7 @@ int main(int argc, char *argv[])
 		free(names[i]);
 	free(names);
 
-post_process:
-	/* ----------------------------------------------------------------
-	 * Post-processing (runtime only): ensure /var/run/ld.so.cache
-	 * exists as a symlink to /etc/ld.so.cache if the latter is present.
-	 * -------------------------------------------------------------- */
-	if (!rootfs_mode) {
-		struct stat st;
-		if (fstatat(rootfd, "etc/ld.so.cache", &st, 0) == 0) {
-			if (fstatat(rootfd, "var/run/ld.so.cache",
-			            &st, AT_SYMLINK_NOFOLLOW) == -1
-			    && errno == ENOENT) {
-				if (dry_run) {
-					printf("[dry-run] ln -s /etc/ld.so.cache"
-					       " /var/run/ld.so.cache\n");
-				} else {
-					if (symlinkat("/etc/ld.so.cache",
-					              rootfd,
-					              "var/run/ld.so.cache") == -1)
-						warn("symlinkat: ld.so.cache");
-				}
-			}
-		}
-	}
-
+done:
 	close(cfgfd);
 	close(rootfd);
 	return EXIT_SUCCESS;
