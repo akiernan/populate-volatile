@@ -209,6 +209,80 @@ static void test_readlink_abs_missing(void)
 }
 
 /* -------------------------------------------------------------------------
+ * pv_resolve_path tests
+ * ---------------------------------------------------------------------- */
+
+static void test_resolve_path_no_symlinks(void)
+{
+	/* Plain directory tree with no symlinks: path passes through unchanged */
+	pv_mkdirtree(tmpfd, "var/run", 0755);
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/run/foo", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/var/run/foo", buf);
+}
+
+static void test_resolve_path_absolute_intermediate_symlink(void)
+{
+	/*
+	 * Simulate: var/log -> /var/volatile/log  (as in a real OE rootfs).
+	 * pv_resolve_path should rewrite /var/log/wtmp
+	 * -> /var/volatile/log/wtmp within tmpfd.
+	 */
+	pv_mkdirtree(tmpfd, "var/volatile/log", 0755);
+	symlinkat("/var/volatile/log", tmpfd, "var/log");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/log/wtmp", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/var/volatile/log/wtmp", buf);
+}
+
+static void test_resolve_path_final_component_not_resolved(void)
+{
+	/*
+	 * When the path itself is the symlink (final component), it must be
+	 * returned verbatim — the caller may be creating or inspecting it.
+	 */
+	pv_mkdirtree(tmpfd, "var", 0755);
+	symlinkat("/var/volatile/log", tmpfd, "var/log");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/log", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/var/log", buf);
+}
+
+static void test_resolve_path_chained_absolute_symlinks(void)
+{
+	/*
+	 * var/run -> /run  and  run -> /var/volatile/run
+	 * /var/run/foo should resolve to /var/volatile/run/foo.
+	 */
+	pv_mkdirtree(tmpfd, "var/volatile/run", 0755);
+	symlinkat("/var/volatile/run", tmpfd, "run");
+	symlinkat("/run", tmpfd, "var/run");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/run/foo", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/var/volatile/run/foo", buf);
+}
+
+static void test_resolve_path_nonexistent_intermediate(void)
+{
+	/*
+	 * Intermediate component doesn't exist yet: pass through unchanged
+	 * (the subsequent *at() call will produce the real error).
+	 */
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/nonexistent/path/file", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/nonexistent/path/file", buf);
+}
+
+/* -------------------------------------------------------------------------
  * pv_unescape_mountinfo tests
  * ---------------------------------------------------------------------- */
 
@@ -290,6 +364,11 @@ int main(void)
 	RUN_TEST(test_readlink_abs_relative_target);
 	RUN_TEST(test_readlink_abs_toplevel_relative);
 	RUN_TEST(test_readlink_abs_missing);
+	RUN_TEST(test_resolve_path_no_symlinks);
+	RUN_TEST(test_resolve_path_absolute_intermediate_symlink);
+	RUN_TEST(test_resolve_path_final_component_not_resolved);
+	RUN_TEST(test_resolve_path_chained_absolute_symlinks);
+	RUN_TEST(test_resolve_path_nonexistent_intermediate);
 	RUN_TEST(test_unescape_space);
 	RUN_TEST(test_unescape_no_escapes);
 	RUN_TEST(test_unescape_multiple);

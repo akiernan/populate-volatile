@@ -48,6 +48,19 @@ int pv_rmtree(int parentfd, const char *name);
 int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz);
 
 /*
+ * Resolve abspath within the tree rooted at rootfd, following symlinks
+ * as if rootfd were "/": absolute symlink targets are interpreted relative
+ * to rootfd rather than the host root.
+ *
+ * Only intermediate components are resolved; the final component is appended
+ * verbatim so callers can create it even when it does not yet exist.
+ *
+ * Writes the resolved absolute path (with leading '/') into buf[bufsz].
+ * Returns 0 on success, -1 on error.
+ */
+int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz);
+
+/*
  * Decode \NNN octal escape sequences in-place, as used in
  * /proc/self/mountinfo (e.g. \040 -> space).
  */

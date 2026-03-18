@@ -518,6 +518,25 @@ int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		return -1;
 	}
 
+	/*
+	 * In rootfs mode the kernel follows absolute symlinks relative to the
+	 * host root, not rootfd.  Walk the path ourselves so that e.g.
+	 * "var/log -> /var/volatile/log" is resolved within the staging tree.
+	 */
+	if (ctx->rootfs_mode) {
+		char resolved[PATH_MAX];
+		if (pv_resolve_path(ctx->rootfd, e.name,
+		                    resolved, sizeof(resolved)) == 0) {
+			int n = snprintf(e.name, sizeof(e.name), "%s", resolved);
+			if (n < 0 || (size_t)n >= sizeof(e.name)) {
+				warnx("apply_entry: resolved path too long: %s",
+				      resolved);
+				return 0; /* non-fatal in rootfs mode */
+			}
+		}
+		/* on error: leave e.name unchanged; ops will fail normally */
+	}
+
 	/* Symlink and bind types are dispatched immediately */
 	if (e.type == PV_TYPE_LINK) {
 		if (ctx->verbose)

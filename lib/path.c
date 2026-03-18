@@ -269,6 +269,178 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz)
 }
 
 /*
+ * pv_resolve_path -- resolve abspath within rootfd, confining symlinks to
+ * the rootfd tree.
+ *
+ * The kernel follows absolute symlinks relative to the host root, not rootfd.
+ * At rootfs build time this breaks *at() calls on paths like "var/log/wtmp"
+ * when "var/log" is a symlink to "/var/volatile/log": the kernel resolves it
+ * against the host root instead of the staging tree.
+ *
+ * This function walks each intermediate component and, when it finds an
+ * absolute symlink, restarts the traversal from rootfd rather than letting
+ * the kernel escape to the host root.  The final component is appended
+ * verbatim (it may not yet exist).
+ *
+ * Relative symlinks are handled by prepending the already-resolved prefix so
+ * that the next traversal step remains within the rootfd tree.
+ */
+#define PV_MAX_SYMLINKS 40
+int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
+{
+	/*
+	 * work:     remaining path to process (relative, no leading '/')
+	 * resolved: components confirmed so far (relative to rootfd)
+	 */
+	char work[PATH_MAX];
+	char resolved[PATH_MAX];
+	char comp[NAME_MAX + 1];
+	char rest[PATH_MAX];
+	char candidate[PATH_MAX];
+	int  depth = 0;
+	int  n;
+
+	if (abspath[0] != '/') {
+		warnx("pv_resolve_path: path must be absolute: %s", abspath);
+		return -1;
+	}
+
+	n = snprintf(work, sizeof(work), "%s", abspath + 1);
+	if (n < 0 || (size_t)n >= sizeof(work)) {
+		warnx("pv_resolve_path: path too long: %s", abspath);
+		return -1;
+	}
+	resolved[0] = '\0';
+
+	for (;;) {
+		/* Split work into the next component and the remainder */
+		char *slash = strchr(work, '/');
+
+		if (slash != NULL) {
+			size_t clen = (size_t)(slash - work);
+			if (clen >= sizeof(comp)) {
+				warnx("pv_resolve_path: component too long");
+				return -1;
+			}
+			memcpy(comp, work, clen);
+			comp[clen] = '\0';
+			n = snprintf(rest, sizeof(rest), "%s", slash + 1);
+			if (n < 0 || (size_t)n >= sizeof(rest)) {
+				warnx("pv_resolve_path: path too long");
+				return -1;
+			}
+		} else {
+			n = snprintf(comp, sizeof(comp), "%s", work);
+			if (n < 0 || (size_t)n >= sizeof(comp)) {
+				warnx("pv_resolve_path: component too long");
+				return -1;
+			}
+			rest[0] = '\0';
+		}
+
+		/* Skip empty components (consecutive or trailing slashes) */
+		if (comp[0] == '\0') {
+			if (rest[0] == '\0') {
+				/* Nothing left: write resolved and return */
+				n = snprintf(buf, bufsz, "/%s", resolved);
+				if (n < 0 || (size_t)n >= bufsz) {
+					warnx("pv_resolve_path: result too long");
+					return -1;
+				}
+				return 0;
+			}
+			n = snprintf(work, sizeof(work), "%s", rest);
+			if (n < 0 || (size_t)n >= sizeof(work)) {
+				warnx("pv_resolve_path: path too long");
+				return -1;
+			}
+			continue;
+		}
+
+		/* Build candidate = resolved + "/" + comp */
+		if (resolved[0] == '\0')
+			n = snprintf(candidate, sizeof(candidate), "%s", comp);
+		else
+			n = snprintf(candidate, sizeof(candidate),
+			             "%s/%s", resolved, comp);
+		if (n < 0 || (size_t)n >= sizeof(candidate)) {
+			warnx("pv_resolve_path: path too long");
+			return -1;
+		}
+
+		/* Final component: append verbatim and return */
+		if (rest[0] == '\0') {
+			n = snprintf(buf, bufsz, "/%s", candidate);
+			if (n < 0 || (size_t)n >= bufsz) {
+				warnx("pv_resolve_path: result too long");
+				return -1;
+			}
+			return 0;
+		}
+
+		/* Intermediate component: check whether it is a symlink */
+		struct stat st;
+		if (fstatat(rootfd, candidate, &st, AT_SYMLINK_NOFOLLOW) == -1 ||
+		    !S_ISLNK(st.st_mode)) {
+			/* Not a symlink (or missing — will fail later): accept */
+			n = snprintf(resolved, sizeof(resolved), "%s", candidate);
+			if (n < 0 || (size_t)n >= sizeof(resolved)) {
+				warnx("pv_resolve_path: path too long");
+				return -1;
+			}
+			n = snprintf(work, sizeof(work), "%s", rest);
+			if (n < 0 || (size_t)n >= sizeof(work)) {
+				warnx("pv_resolve_path: path too long");
+				return -1;
+			}
+			continue;
+		}
+
+		if (++depth > PV_MAX_SYMLINKS) {
+			warnx("pv_resolve_path: too many symlinks: %s", abspath);
+			return -1;
+		}
+
+		char target[PATH_MAX];
+		ssize_t len = readlinkat(rootfd, candidate,
+		                         target, sizeof(target) - 1);
+		if (len == -1) {
+			warn("pv_resolve_path: readlinkat: %s", candidate);
+			return -1;
+		}
+		target[len] = '\0';
+
+		/*
+		 * Rebuild work as target + "/" + rest, then restart the
+		 * traversal from the appropriate base:
+		 *
+		 * Absolute target: restart from rootfd root (clear resolved).
+		 * Relative target: resolve relative to dirname(candidate),
+		 *   which is `resolved` — prepend it so the traversal stays
+		 *   within the rootfd tree.
+		 */
+		if (target[0] == '/') {
+			n = snprintf(work, sizeof(work),
+			             "%s/%s", target + 1, rest);
+		} else {
+			if (resolved[0] != '\0')
+				n = snprintf(work, sizeof(work),
+				             "%s/%s/%s", resolved, target, rest);
+			else
+				n = snprintf(work, sizeof(work),
+				             "%s/%s", target, rest);
+		}
+		if (n < 0 || (size_t)n >= sizeof(work)) {
+			warnx("pv_resolve_path: path too long after symlink");
+			return -1;
+		}
+		resolved[0] = '\0';
+	}
+	/* unreachable */
+	return -1;
+}
+
+/*
  * pv_unescape_mountinfo -- decode \NNN octal escapes in-place.
  *
  * /proc/self/mountinfo encodes special characters (including spaces) as
