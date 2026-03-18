@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "pv/config.h"
+#include "pv/trace.h"
 #include "pv/validate.h"
 
 int pv_user_exists(const char *user)
@@ -50,6 +51,7 @@ int pv_user_exists(const char *user)
 		warn("getpwnam_r: %s", user);
 		return -1;
 	}
+	TRACE("user=\"%s\" -> %s", user, result != NULL ? "found" : "not found");
 	return result != NULL ? 1 : 0;
 }
 
@@ -79,6 +81,7 @@ int pv_group_exists(const char *group)
 		warn("getgrnam_r: %s", group);
 		return -1;
 	}
+	TRACE("group=\"%s\" -> %s", group, result != NULL ? "found" : "not found");
 	return result != NULL ? 1 : 0;
 }
 

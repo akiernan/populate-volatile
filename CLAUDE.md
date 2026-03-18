@@ -30,10 +30,16 @@ Docker convenience wrapper (runs build + tests inside Ubuntu 24.04):
 
 `populate-volatile` reads declarative config files from `/etc/default/volatiles/` (one entry per line: `TYPE USER GROUP MODE NAME LTARGET`) and creates the described files, directories, symlinks, or bind-mounts on a tmpfs/ramfs at boot, or stages them into a rootfs image at build time (via `-r <rootdir>`, run under [pseudo](https://git.yoctoproject.org/pseudo)).
 
+### Runtime flags
+
+- `-v` — verbose: log each action to stdout
+- `-n` — dry-run: implies `-v`; no filesystem changes made
+- `-T` — trace: emit detailed per-syscall diagnostics to stderr (unbuffered); useful for diagnosing failed operations. Controlled by global `int pv_trace` (defined in `lib/path.c`, declared in `include/pv/trace.h`).
+
 ### Processing order
 
 1. `00_core` is applied first, unconditionally and without user/group validation, because it creates `/var/volatile/tmp` which the requirement checker needs.
-2. All remaining config files are bulk-validated (`pv_check_requirements`). If all pass, entries are applied in one pass (fast path). If any fail, each file is retried individually and bad ones are skipped (slow path).
+2. All remaining config files apply entries individually; entries whose user/group don't exist are skipped.
 
 ### Library (`libpv`, static)
 

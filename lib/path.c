@@ -24,6 +24,7 @@
 #include "pv/path.h"
 
 mode_t pv_saved_umask;
+int    pv_trace;
 
 /*
  * pv_mkdirtree_fd -- create a directory tree component by component.
@@ -42,6 +43,8 @@ int pv_mkdirtree_fd(int dirfd, const char *path, mode_t mode)
 	mode_t imask;
 
 	imask = (S_IRWXU | S_IRWXG | S_IRWXO) & ~pv_saved_umask;
+
+	TRACE("path=\"%s\" mode=%04o", path, (unsigned)mode);
 
 	if ((buf = strdup(path)) == NULL) {
 		warn("strdup");
@@ -83,20 +86,30 @@ int pv_mkdirtree_fd(int dirfd, const char *path, mode_t mode)
 		 * Intermediate components get imask permissions; the leaf
 		 * gets the requested mode.
 		 */
-		if (mkdirat(fd, p, (slash != NULL) ? imask : mode) == -1
-		    && errno != EEXIST) {
-			warn("mkdirat: %s", p);
-			close(fd);
-			free(buf);
-			return -1;
+		if (mkdirat(fd, p, (slash != NULL) ? imask : mode) == -1) {
+			if (errno != EEXIST) {
+				TRACE("mkdirat(\"%s\") failed: %s",
+				      p, strerror(errno));
+				warn("mkdirat: %s", p);
+				close(fd);
+				free(buf);
+				return -1;
+			}
+			TRACE("mkdirat(\"%s\"): already exists", p);
+		} else {
+			TRACE("mkdirat(\"%s\"): created mode=%04o", p,
+			      (unsigned)(slash != NULL ? imask : mode));
 		}
 
 		newfd = openat(fd, p, O_RDONLY | O_DIRECTORY);
 		close(fd);
 		if (newfd == -1) {
+			TRACE("openat(\"%s\", O_DIRECTORY) failed: %s",
+			      p, strerror(errno));
 			free(buf);
 			return -1;
 		}
+		TRACE("openat(\"%s\", O_DIRECTORY) -> fd=%d", p, newfd);
 		fd = newfd;
 
 		if (slash != NULL)
@@ -136,11 +149,16 @@ int pv_rmtree(int parentfd, const char *name)
 	DIR *dir;
 	struct dirent *ent;
 
+	TRACE("name=\"%s\"", name);
+
 	fd = openat(parentfd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd == -1) {
+		TRACE("openat(\"%s\", O_DIRECTORY|O_NOFOLLOW) failed: %s",
+		      name, strerror(errno));
 		warn("openat(rmtree): %s", name);
 		return -1;
 	}
+	TRACE("openat(\"%s\") -> fd=%d", name, fd);
 
 	dir = fdopendir(fd);
 	if (dir == NULL) {
@@ -157,6 +175,7 @@ int pv_rmtree(int parentfd, const char *name)
 			continue;
 
 		if (ent->d_type == DT_DIR) {
+			TRACE("entry \"%s\": dir -> recurse", ent->d_name);
 			if (pv_rmtree(fd, ent->d_name) == -1)
 				ret = -1;
 		} else if (ent->d_type == DT_UNKNOWN) {
@@ -164,20 +183,28 @@ int pv_rmtree(int parentfd, const char *name)
 			struct stat st;
 			if (fstatat(fd, ent->d_name, &st,
 			            AT_SYMLINK_NOFOLLOW) == -1) {
+				TRACE("fstatat(\"%s\") failed: %s",
+				      ent->d_name, strerror(errno));
 				warn("fstatat: %s", ent->d_name);
 				ret = -1;
 				continue;
 			}
 			if (S_ISDIR(st.st_mode)) {
+				TRACE("entry \"%s\": dir (via stat) -> recurse",
+				      ent->d_name);
 				if (pv_rmtree(fd, ent->d_name) == -1)
 					ret = -1;
 			} else {
+				TRACE("entry \"%s\": non-dir (via stat) -> unlink",
+				      ent->d_name);
 				if (unlinkat(fd, ent->d_name, 0) == -1) {
 					warn("unlinkat: %s", ent->d_name);
 					ret = -1;
 				}
 			}
 		} else {
+			TRACE("entry \"%s\": type=%d -> unlink",
+			      ent->d_name, (int)ent->d_type);
 			if (unlinkat(fd, ent->d_name, 0) == -1) {
 				warn("unlinkat: %s", ent->d_name);
 				ret = -1;
@@ -188,8 +215,12 @@ int pv_rmtree(int parentfd, const char *name)
 	closedir(dir); /* also closes fd */
 
 	if (unlinkat(parentfd, name, AT_REMOVEDIR) == -1) {
+		TRACE("unlinkat(AT_REMOVEDIR, \"%s\") failed: %s",
+		      name, strerror(errno));
 		warn("unlinkat(AT_REMOVEDIR): %s", name);
 		ret = -1;
+	} else {
+		TRACE("unlinkat(AT_REMOVEDIR, \"%s\"): ok", name);
 	}
 	return ret;
 }
@@ -215,6 +246,8 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz)
 	ssize_t len;
 	int n;
 
+	TRACE("abspath=\"%s\"", abspath);
+
 	if (abspath[0] != '/') {
 		warnx("pv_readlink_abs: path must be absolute: %s", abspath);
 		return -1;
@@ -222,10 +255,13 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz)
 
 	len = readlinkat(dirfd, abspath + 1, target, sizeof(target) - 1);
 	if (len == -1) {
+		TRACE("readlinkat(\"%s\") failed: %s",
+		      abspath + 1, strerror(errno));
 		warn("readlinkat: %s", abspath);
 		return -1;
 	}
 	target[len] = '\0';
+	TRACE("readlinkat(\"%s\") -> \"%s\"", abspath + 1, target);
 
 	if (target[0] == '/') {
 		/* Absolute link target */
@@ -234,6 +270,7 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz)
 			return -1;
 		}
 		memcpy(buf, target, (size_t)len + 1);
+		TRACE("absolute target -> \"%s\"", buf);
 		return 0;
 	}
 
@@ -264,6 +301,7 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz)
 		warnx("pv_readlink_abs: resolved path too long");
 		return -1;
 	}
+	TRACE("relative target \"%s\" -> \"%s\"", target, buf);
 	return 0;
 }
 
@@ -298,6 +336,8 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 	char candidate[PATH_MAX];
 	int  depth = 0;
 	int  n;
+
+	TRACE("abspath=\"%s\"", abspath);
 
 	if (abspath[0] != '/') {
 		warnx("pv_resolve_path: path must be absolute: %s", abspath);
@@ -346,6 +386,7 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 					warnx("pv_resolve_path: result too long");
 					return -1;
 				}
+				TRACE("result (empty comp): \"%s\"", buf);
 				return 0;
 			}
 			n = snprintf(work, sizeof(work), "%s", rest);
@@ -374,6 +415,8 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 				warnx("pv_resolve_path: result too long");
 				return -1;
 			}
+			TRACE("result (final component \"%s\"): \"%s\"",
+			      comp, buf);
 			return 0;
 		}
 
@@ -382,6 +425,7 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 		if (fstatat(rootfd, candidate, &st, AT_SYMLINK_NOFOLLOW) == -1 ||
 		    !S_ISLNK(st.st_mode)) {
 			/* Not a symlink (or missing — will fail later): accept */
+			TRACE("component \"%s\": not a symlink -> accept", comp);
 			n = snprintf(resolved, sizeof(resolved), "%s", candidate);
 			if (n < 0 || (size_t)n >= sizeof(resolved)) {
 				warnx("pv_resolve_path: path too long");
@@ -408,6 +452,8 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 			return -1;
 		}
 		target[len] = '\0';
+		TRACE("component \"%s\": symlink -> \"%s\" (rest=\"%s\")",
+		      comp, target, rest);
 
 		/*
 		 * Rebuild work as target + "/" + rest, then restart the
@@ -421,6 +467,8 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 		if (target[0] == '/') {
 			n = snprintf(work, sizeof(work),
 			             "%s/%s", target + 1, rest);
+			TRACE("absolute symlink: restart from root, work=\"%s\"",
+			      work);
 		} else {
 			if (resolved[0] != '\0')
 				n = snprintf(work, sizeof(work),
@@ -428,6 +476,7 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 			else
 				n = snprintf(work, sizeof(work),
 				             "%s/%s", target, rest);
+			TRACE("relative symlink: work=\"%s\"", work);
 		}
 		if (n < 0 || (size_t)n >= sizeof(work)) {
 			warnx("pv_resolve_path: path too long after symlink");
@@ -483,6 +532,8 @@ int pv_is_mounted(const char *path)
 	char line[4096];
 	int found = 0;
 
+	TRACE("checking \"%s\"", path);
+
 	f = fopen("/proc/self/mountinfo", "r");
 	if (f == NULL) {
 		warn("fopen: /proc/self/mountinfo");
@@ -503,8 +554,10 @@ int pv_is_mounted(const char *path)
 		while (tok != NULL) {
 			if (field == 4) {
 				pv_unescape_mountinfo(tok);
-				if (strcmp(tok, path) == 0)
+				if (strcmp(tok, path) == 0) {
+					TRACE("found: mountpoint=\"%s\"", tok);
 					found = 1;
+				}
 				break;
 			}
 			tok = strtok_r(NULL, " \t", &saveptr);
@@ -513,5 +566,7 @@ int pv_is_mounted(const char *path)
 	}
 
 	fclose(f);
+	if (!found)
+		TRACE("\"%s\" not found in /proc/self/mountinfo", path);
 	return found;
 }

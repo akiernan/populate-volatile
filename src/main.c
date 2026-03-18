@@ -34,6 +34,7 @@
 #include "pv/config.h"
 #include "pv/ops.h"
 #include "pv/path.h"
+#include "pv/trace.h"
 #include "pv/validate.h"
 
 #define COREDEF "00_core"
@@ -243,7 +244,7 @@ static int process_cfgfile(const pv_ctx_t *ctx, int cfgfd,
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-	        "usage: %s [-v] [-n] [-r rootdir] [-C cfgdir] [cfgfile ...]\n",
+	        "usage: %s [-v] [-n] [-T] [-r rootdir] [-C cfgdir] [cfgfile ...]\n",
 	        prog);
 	exit(EXIT_FAILURE);
 }
@@ -257,10 +258,11 @@ int main(int argc, char *argv[])
 	int dry_run  = 0;
 	int opt;
 
-	while ((opt = getopt(argc, argv, "vnr:C:")) != -1) {
+	while ((opt = getopt(argc, argv, "vnTr:C:")) != -1) {
 		switch (opt) {
 		case 'v': verbose = 1; break;
 		case 'n': dry_run = 1; verbose = 1; break;
+		case 'T': pv_trace = 1; break;
 		case 'r': rootdir = optarg; break;
 		case 'C': cfgdir  = optarg; break;
 		default:  usage(argv[0]);

@@ -73,6 +73,7 @@ static int resolve_ids(const char *user, const char *group,
 		return -1;
 	}
 	*uid = pwdp->pw_uid;
+	TRACE("user \"%s\" -> uid=%u", user, (unsigned)*uid);
 
 	if (gr_bufsz == 0) {
 		gr_bufsz = sysconf(_SC_GETGR_R_SIZE_MAX);
@@ -91,6 +92,7 @@ static int resolve_ids(const char *user, const char *group,
 		return -1;
 	}
 	*gid = grpp->gr_gid;
+	TRACE("group \"%s\" -> gid=%u", group, (unsigned)*gid);
 
 	return 0;
 }
@@ -132,6 +134,9 @@ static int apply_meta(const pv_ctx_t *ctx, const char *relpath,
 {
 	int r = 0;
 
+	TRACE("relpath=\"%s\" uid=%u gid=%u mode=%04o",
+	      relpath, (unsigned)uid, (unsigned)gid, (unsigned)mode);
+
 	if (fchownat(ctx->rootfd, relpath, uid, gid, AT_SYMLINK_NOFOLLOW) == -1) {
 		warn("chown %u:%u %s", (unsigned)uid, (unsigned)gid, relpath);
 		if (!ctx->rootfs_mode)
@@ -162,6 +167,8 @@ static int exec_cp_a(const char *src, const char *dst)
 		return -1;
 	}
 
+	TRACE("cp -a \"%s\" \"%s\"", src_dot, dst);
+
 	pid = fork();
 	if (pid == -1) {
 		warn("fork");
@@ -179,9 +186,13 @@ static int exec_cp_a(const char *src, const char *dst)
 		return -1;
 	}
 	/* cp may exit non-zero if the source was empty; that is acceptable */
-	if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
+	if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+		TRACE("cp exited %d (source may be empty)", WEXITSTATUS(status));
 		warnx("cp -a '%s/.' '%s' exited %d (may be empty — continuing)",
 		      src, dst, WEXITSTATUS(status));
+	} else {
+		TRACE("cp -> ok");
+	}
 	return 0;
 }
 
@@ -211,6 +222,7 @@ static int full_path(const pv_ctx_t *ctx, const char *name,
 		warnx("full_path: path too long: %s%s", ctx->rootdir, name);
 		return -1;
 	}
+	TRACE("\"%s\" -> \"%s\"", name, buf);
 	return 0;
 }
 
@@ -225,18 +237,25 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	gid_t gid = 0;
 	int fd;
 
+	TRACE("name=\"%s\" ltarget=\"%s\"", entry->name, entry->ltarget);
+
 	/* Check whether target already exists */
 	struct stat st;
 	if (fstatat(ctx->rootfd, relname, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+		TRACE("fstatat(\"%s\") -> exists (mode=%04o type=0%o)",
+		      relname, (unsigned)(st.st_mode & 07777),
+		      (unsigned)(st.st_mode & S_IFMT) >> 12);
 		if (ctx->verbose)
 			printf("Target already exists, skipping: %s\n",
 			       entry->name);
 		return 0;
 	}
 	if (errno != ENOENT) {
+		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
 		warn("fstatat: %s", entry->name);
 		return ctx->rootfs_mode ? 0 : -1;
 	}
+	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
 
 	if (ctx->dry_run) {
 		if (entry->ltarget[0] != '\0')
@@ -265,19 +284,25 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		const char *relsrc = entry->ltarget[0] == '/'
 		                     ? entry->ltarget + 1
 		                     : entry->ltarget;
+		TRACE("opening source \"%s\"", relsrc);
 		int srcfd = openat(ctx->rootfd, relsrc, O_RDONLY);
 		if (srcfd == -1) {
+			TRACE("openat source \"%s\" failed: %s",
+			      relsrc, strerror(errno));
 			warn("open source: %s", entry->ltarget);
 			return ctx->rootfs_mode ? 0 : -1;
 		}
 		fd = openat(ctx->rootfd, relname,
 		            O_WRONLY | O_CREAT | O_EXCL, entry->mode);
 		if (fd == -1) {
+			TRACE("openat dest \"%s\" failed: %s",
+			      relname, strerror(errno));
 			warn("create: %s", entry->name);
 			close(srcfd);
 			return ctx->rootfs_mode ? 0 : -1;
 		}
 		if (copy_fd(srcfd, fd) == -1) {
+			TRACE("copy_fd failed: %s", strerror(errno));
 			warn("copy: %s -> %s", entry->ltarget, entry->name);
 			close(srcfd);
 			close(fd);
@@ -285,15 +310,19 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		}
 		close(srcfd);
 		close(fd);
+		TRACE("copied \"%s\" -> \"%s\"", relsrc, relname);
 	} else {
 		/* Touch: create empty file */
 		fd = openat(ctx->rootfd, relname,
 		            O_WRONLY | O_CREAT | O_EXCL, entry->mode);
 		if (fd == -1) {
+			TRACE("touch \"%s\" failed: %s",
+			      relname, strerror(errno));
 			warn("touch: %s", entry->name);
 			return ctx->rootfs_mode ? 0 : -1;
 		}
 		close(fd);
+		TRACE("touched \"%s\"", relname);
 	}
 
 	if (ctx->verbose)
@@ -308,18 +337,25 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	uid_t uid = 0;
 	gid_t gid = 0;
 
+	TRACE("name=\"%s\" mode=%04o", entry->name, (unsigned)entry->mode);
+
 	/* Check whether target already exists */
 	struct stat st;
 	if (fstatat(ctx->rootfd, relname, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+		TRACE("fstatat(\"%s\") -> exists (mode=%04o ifmt=0%o)",
+		      relname, (unsigned)(st.st_mode & 07777),
+		      (unsigned)((st.st_mode & S_IFMT) >> 12));
 		if (ctx->verbose)
 			printf("Target already exists, skipping: %s\n",
 			       entry->name);
 		return 0;
 	}
 	if (errno != ENOENT) {
+		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
 		warn("fstatat: %s", entry->name);
 		return ctx->rootfs_mode ? 0 : -1;
 	}
+	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
 
 	if (ctx->dry_run) {
 		printf("[dry-run] mkdir -p %s  (mode=%04o, owner=%s:%s)\n",
@@ -334,11 +370,13 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	}
 
 	if (pv_mkdirtree(ctx->rootfd, relname, entry->mode) == -1) {
+		TRACE("pv_mkdirtree(\"%s\") failed", relname);
 		warn("mkdirtree: %s", entry->name);
 		if (!ctx->rootfs_mode)
 			return -1;
 		return 0;
 	}
+	TRACE("pv_mkdirtree(\"%s\") -> ok", relname);
 
 	if (ctx->verbose)
 		printf("Created directory: %s\n", entry->name);
@@ -352,6 +390,8 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	struct stat st;
 	int r;
 
+	TRACE("name=\"%s\" ltarget=\"%s\"", entry->name, entry->ltarget);
+
 	r = fstatat(ctx->rootfd, relname, &st, AT_SYMLINK_NOFOLLOW);
 
 	if (r == 0 && S_ISLNK(st.st_mode)) {
@@ -360,12 +400,17 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		ssize_t len = readlinkat(ctx->rootfd, relname,
 		                         current, sizeof(current) - 1);
 		if (len == -1) {
+			TRACE("readlinkat(\"%s\") failed: %s",
+			      relname, strerror(errno));
 			warn("readlinkat: %s", entry->name);
 			return -1;
 		}
 		current[len] = '\0';
+		TRACE("case 1/2: existing symlink \"%s\" -> \"%s\"",
+		      relname, current);
 
 		if (strcmp(current, entry->ltarget) == 0) {
+			TRACE("target matches -> no-op");
 			if (ctx->verbose)
 				printf("Symlink already correct: %s -> %s\n",
 				       entry->name, entry->ltarget);
@@ -373,6 +418,8 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		}
 
 		/* Wrong target */
+		TRACE("wrong target \"%s\", want \"%s\" -> update",
+		      current, entry->ltarget);
 		if (ctx->dry_run) {
 			printf("[dry-run] ln -sf %s %s"
 			       "  (replacing wrong target '%s')\n",
@@ -383,23 +430,33 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			printf("Updating symlink: %s -> %s (was %s)\n",
 			       entry->name, entry->ltarget, current);
 		if (unlinkat(ctx->rootfd, relname, 0) == -1) {
+			TRACE("unlinkat(\"%s\") failed: %s",
+			      relname, strerror(errno));
 			warn("unlinkat: %s", entry->name);
 			return -1;
 		}
+		TRACE("unlinkat(\"%s\") ok", relname);
 		if (symlinkat(entry->ltarget, ctx->rootfd, relname) == -1) {
+			TRACE("symlinkat(\"%s\" -> \"%s\") failed: %s",
+			      relname, entry->ltarget, strerror(errno));
 			warn("symlinkat: %s -> %s",
 			     entry->name, entry->ltarget);
 			return -1;
 		}
+		TRACE("symlinkat(\"%s\" -> \"%s\") ok", relname, entry->ltarget);
 		return 0;
 
 	} else if (r == 0 && S_ISDIR(st.st_mode)) {
 		/* --- Case 3: existing directory --- */
+		TRACE("case 3: existing directory mode=%04o",
+		      (unsigned)(st.st_mode & 07777));
 		char fullname[PATH_MAX];
 		if (full_path(ctx, entry->name, fullname, sizeof(fullname)) == -1)
 			return -1;
 
-		if (!ctx->rootfs_mode && pv_is_mounted(fullname)) {
+		int mounted = pv_is_mounted(fullname);
+		TRACE("pv_is_mounted(\"%s\") -> %d", fullname, mounted);
+		if (!ctx->rootfs_mode && mounted) {
 			warnx("link_file: %s is a mountpoint, skipping",
 			      entry->name);
 			return 0;
@@ -436,19 +493,37 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		const char *reltgt = entry->ltarget[0] == '/'
 		                     ? entry->ltarget + 1
 		                     : entry->ltarget;
-		if (pv_mkdirtree(ctx->rootfd, reltgt, 0755) == 0)
+		TRACE("pv_mkdirtree(\"%s\")", reltgt);
+		if (pv_mkdirtree(ctx->rootfd, reltgt, 0755) == 0) {
+			TRACE("pv_mkdirtree ok -> exec_cp_a");
 			exec_cp_a(fullname, fulltgt);
+		} else {
+			TRACE("pv_mkdirtree failed (%s) -> skipping content copy",
+			      strerror(errno));
+		}
 
-		if (pv_rmtree(ctx->rootfd, relname) == -1)
+		TRACE("pv_rmtree(\"%s\")", relname);
+		if (pv_rmtree(ctx->rootfd, relname) == -1) {
+			TRACE("pv_rmtree failed: %s", strerror(errno));
 			return -1;
+		}
+		TRACE("pv_rmtree ok");
 
 		if (ctx->verbose)
 			printf("Migrated dir %s -> symlink to %s\n",
 			       entry->name, entry->ltarget);
 
-	} else if (r == -1 && errno != ENOENT) {
+	} else if (r == -1 && errno == ENOENT) {
+		TRACE("case 4: does not exist -> create symlink");
+	} else if (r == -1) {
+		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
 		warn("fstatat: %s", entry->name);
 		return ctx->rootfs_mode ? 0 : -1;
+	} else {
+		/* Exists but is not a symlink or directory */
+		TRACE("fstatat(\"%s\") -> mode=%04o ifmt=0%o (not dir/link)",
+		      relname, (unsigned)(st.st_mode & 07777),
+		      (unsigned)((st.st_mode & S_IFMT) >> 12));
 	}
 
 	/* --- Case 3 (after migration) or Case 4: create symlink --- */
@@ -468,19 +543,26 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	char *slash = strrchr(parent, '/');
 	if (slash != NULL && slash != parent) {
 		*slash = '\0';
+		TRACE("ensuring parent dir \"%s\"", parent);
 		if (pv_mkdirtree(ctx->rootfd, parent, 0755) == -1 &&
 		    errno != EEXIST) {
+			TRACE("pv_mkdirtree parent \"%s\" failed: %s",
+			      parent, strerror(errno));
 			if (!ctx->rootfs_mode)
 				return -1;
 		}
 	}
 
+	TRACE("symlinkat(\"%s\" -> \"%s\", rootfd, \"%s\")",
+	      entry->name, entry->ltarget, relname);
 	if (symlinkat(entry->ltarget, ctx->rootfd, relname) == -1) {
+		TRACE("symlinkat failed: %s", strerror(errno));
 		if (errno == EEXIST && ctx->rootfs_mode)
 			return 0;
 		warn("symlinkat: %s -> %s", entry->name, entry->ltarget);
 		return ctx->rootfs_mode ? 0 : -1;
 	}
+	TRACE("symlinkat ok");
 
 	if (ctx->verbose)
 		printf("Created symlink: %s -> %s\n",
@@ -493,6 +575,8 @@ int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	char fulldst[PATH_MAX];
 	char fullsrc[PATH_MAX];
 
+	TRACE("name=\"%s\" ltarget=\"%s\"", entry->name, entry->ltarget);
+
 	if (full_path(ctx, entry->name,    fulldst, sizeof(fulldst)) == -1 ||
 	    full_path(ctx, entry->ltarget, fullsrc, sizeof(fullsrc)) == -1)
 		return -1;
@@ -503,6 +587,7 @@ int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	 * and would fail.  Log the intended operation and skip.
 	 */
 	if (ctx->rootfs_mode) {
+		TRACE("rootfs_mode: skipping bind mount");
 		printf("Skipping bind mount (rootfs mode): mount --bind %s %s\n",
 		       fullsrc, fulldst);
 		return 0;
@@ -513,9 +598,11 @@ int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		return 0;
 	}
 
+	TRACE("mount --bind \"%s\" \"%s\"", fullsrc, fulldst);
 	if (mount(fullsrc, fulldst, NULL, MS_BIND, NULL) == -1)
 		err(EXIT_FAILURE, "mount --bind %s %s", fullsrc, fulldst);
 
+	TRACE("mount ok");
 	if (ctx->verbose)
 		printf("Bind-mounted: %s -> %s\n", fullsrc, fulldst);
 	return 0;
@@ -524,6 +611,10 @@ int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry)
 int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 {
 	pv_entry_t e = *entry; /* work on a mutable copy */
+
+	TRACE("name=\"%s\" type='%c' user=%s group=%s mode=%04o ltarget=\"%s\"",
+	      e.name, (char)e.type, e.user, e.group,
+	      (unsigned)e.mode, e.ltarget);
 
 	if (e.name[0] != '/') {
 		warnx("apply_entry: name must be absolute: %s", e.name);
@@ -539,12 +630,17 @@ int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		char resolved[PATH_MAX];
 		if (pv_resolve_path(ctx->rootfd, e.name,
 		                    resolved, sizeof(resolved)) == 0) {
+			if (strcmp(resolved, e.name) != 0)
+				TRACE("rootfs resolve: \"%s\" -> \"%s\"",
+				      e.name, resolved);
 			int n = snprintf(e.name, sizeof(e.name), "%s", resolved);
 			if (n < 0 || (size_t)n >= sizeof(e.name)) {
 				warnx("apply_entry: resolved path too long: %s",
 				      resolved);
 				return 0; /* non-fatal in rootfs mode */
 			}
+		} else {
+			TRACE("rootfs resolve: pv_resolve_path failed, using original");
 		}
 		/* on error: leave e.name unchanged; ops will fail normally */
 	}
@@ -570,6 +666,8 @@ int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	if (fstatat(ctx->rootfd, e.name + 1, &st, AT_SYMLINK_NOFOLLOW) == 0
 	    && S_ISLNK(st.st_mode)) {
 		char resolved[PATH_MAX];
+		TRACE("name \"%s\" is a symlink -> following for f/d dispatch",
+		      e.name);
 		if (pv_readlink_abs(ctx->rootfd, e.name,
 		                    resolved, sizeof(resolved)) == -1)
 			return ctx->rootfs_mode ? 0 : -1;
@@ -577,6 +675,7 @@ int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		if (ctx->verbose)
 			printf("Found link. Resolved %s -> %s\n",
 			       e.name, resolved);
+		TRACE("resolved \"%s\" -> \"%s\"", e.name, resolved);
 
 		if (strlen(resolved) >= sizeof(e.name)) {
 			warnx("apply_entry: resolved path too long: %s", resolved);

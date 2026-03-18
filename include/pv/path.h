@@ -5,6 +5,8 @@
 #include <sys/types.h>
 #include <stddef.h>
 
+#include "pv/trace.h"
+
 /*
  * Saved umask from startup. Set once in main() via umask(0).
  * Used by pv_mkdirtree_fd() when creating intermediate directories.

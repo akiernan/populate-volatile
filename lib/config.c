@@ -17,6 +17,7 @@
 #include <unistd.h>
 
 #include "pv/config.h"
+#include "pv/trace.h"
 
 int pv_parse_line(const char *line, pv_entry_t *out)
 {
@@ -117,6 +118,7 @@ int pv_parse_config(int cfgfd, const char *path,
 	pv_entry_t entry;
 	int ret = 0;
 
+	TRACE("path=\"%s\"", path);
 	fd = openat(cfgfd, path, O_RDONLY);
 	if (fd == -1) {
 		warn("openat: %s", path);
@@ -137,6 +139,10 @@ int pv_parse_config(int cfgfd, const char *path,
 			continue; /* skip blank/comment */
 		if (r == -1)
 			continue; /* parse error already warned; keep going */
+
+		TRACE("parsed: type=%c user=%s group=%s mode=%04o name=\"%s\" ltarget=\"%s\"",
+		      "fdlb"[entry.type], entry.user, entry.group,
+		      (unsigned)entry.mode, entry.name, entry.ltarget);
 
 		r = cb(&entry, userdata);
 		if (r != 0) {
