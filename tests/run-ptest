@@ -7,9 +7,12 @@
 
 cd "$(dirname "$0")"
 
+# run_suite BINARY -- run a Unity test binary and reformat its output.
+# Exit code 77 means "skipped" (CAP_SYS_ADMIN absent); treated as pass.
 run_suite() {
     output=$("$1")
     suite_rc=$?
+    [ "$suite_rc" -eq 77 ] && return 0
     echo "$output" | while IFS= read -r line; do
         # Unity result lines: path:line:name:PASS  or  path:line:name:FAIL: msg
         case "$line" in
@@ -28,8 +31,36 @@ run_suite() {
     return "$suite_rc"
 }
 
+# run_integration SCRIPT -- run an integration test script with the installed
+# populate-volatile binary.  The scripts print "PASS: <name>" or "FAIL: ..."
+# themselves; capture combined output and pass it through.
+run_integration() {
+    script=$1
+    name=$(basename "$script" .sh)
+    output=$("$script" "$(command -v populate-volatile)" 2>&1)
+    int_rc=$?
+    result=$(printf '%s\n' "$output" | grep -E '^(PASS|FAIL):')
+    if [ -n "$result" ]; then
+        echo "$result"
+    elif [ "$int_rc" -ne 0 ]; then
+        echo "FAIL: $name"
+    fi
+    return "$int_rc"
+}
+
 rc=0
-for suite in test_config test_path test_validate test_ops; do
+for suite in test_config test_path test_validate test_ops test_bind_mount; do
     run_suite "./$suite" || rc=1
 done
+
+for script in integration/test_dirs.sh \
+              integration/test_files.sh \
+              integration/test_symlinks.sh \
+              integration/test_migration.sh \
+              integration/test_ordering.sh \
+              integration/test_usercheck.sh \
+              integration/test_dryrun.sh; do
+    run_integration "./$script" || rc=1
+done
+
 exit "$rc"
