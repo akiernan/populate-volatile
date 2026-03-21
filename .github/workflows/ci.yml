@@ -42,3 +42,29 @@ jobs:
 
       - name: Test
         run: meson test -C build --print-errorlogs
+
+  test-privileged:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      options: --privileged
+
+    name: bind-mount integration (privileged)
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            meson ninja-build gcc
+
+      - name: Configure
+        run: meson setup build -Dc_std=c99 -Dwarning_level=2
+
+      - name: Build
+        run: meson compile -C build
+
+      - name: Test
+        run: meson test -C build --print-errorlogs

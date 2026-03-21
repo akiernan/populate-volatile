@@ -96,6 +96,18 @@ foreach t : ['config', 'path', 'validate', 'ops']
   )
 endforeach
 
+# bind_mount requires CAP_SYS_ADMIN; the binary exits 77 (meson SKIP) when
+# the capability is absent so unprivileged CI runs still pass.
+test('bind_mount',
+  executable('test_bind_mount',
+    sources             : ['tests/test_bind_mount.c'] + unity_src,
+    dependencies        : libpv_dep,
+    include_directories : unity_inc,
+    c_args              : common_args,
+  ),
+  timeout : 30,
+)
+
 summary({
   'description' : 'Set up volatile directories from declarative config at boot or rootfs build time',
   'install dir' : get_option('sbindir'),

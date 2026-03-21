@@ -371,6 +371,43 @@ static void test_link_file_dry_run_migrate(void)
 }
 
 /* -------------------------------------------------------------------------
+ * pv_bind_mount tests (dry-run and rootfs-mode paths; no mount needed)
+ * ---------------------------------------------------------------------- */
+
+static void test_bind_mount_dry_run(void)
+{
+	pv_ctx_t dry_ctx = ctx;
+	dry_ctx.dry_run = 1;
+	dry_ctx.verbose = 1;
+
+	pv_entry_t e = make_entry(PV_TYPE_BIND, test_user, test_group,
+	                           0755, "/bmdst", "/bmsrc");
+	int r = pv_bind_mount(&dry_ctx, &e);
+	TEST_ASSERT_EQUAL_INT(0, r);
+
+	/* Must not have been mounted */
+	char dst[PATH_MAX];
+	snprintf(dst, sizeof(dst), "%s/bmdst", tmpbase);
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst));
+}
+
+static void test_bind_mount_rootfs_mode(void)
+{
+	pv_ctx_t rfs_ctx = ctx;
+	rfs_ctx.rootfs_mode = 1;
+	rfs_ctx.verbose     = 1;
+
+	pv_entry_t e = make_entry(PV_TYPE_BIND, test_user, test_group,
+	                           0755, "/rfdst", "/rfsrc");
+	int r = pv_bind_mount(&rfs_ctx, &e);
+	TEST_ASSERT_EQUAL_INT(0, r);
+
+	char dst[PATH_MAX];
+	snprintf(dst, sizeof(dst), "%s/rfdst", tmpbase);
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst));
+}
+
+/* -------------------------------------------------------------------------
  * pv_apply_entry dispatch tests
  * ---------------------------------------------------------------------- */
 
@@ -412,6 +449,22 @@ static void test_apply_entry_dispatches_link(void)
 	TEST_ASSERT_EQUAL_INT(0,
 	    fstatat(tmpfd, "lnkdir/run", &st, AT_SYMLINK_NOFOLLOW));
 	TEST_ASSERT_TRUE(S_ISLNK(st.st_mode));
+}
+
+static void test_apply_entry_dispatches_bind_dry_run(void)
+{
+	pv_ctx_t dry_ctx = ctx;
+	dry_ctx.dry_run = 1;
+	dry_ctx.verbose = 1;
+
+	pv_entry_t e = make_entry(PV_TYPE_BIND, test_user, test_group,
+	                           0755, "/addst", "/adsrc");
+	int r = pv_apply_entry(&dry_ctx, &e);
+	TEST_ASSERT_EQUAL_INT(0, r);
+
+	char dst[PATH_MAX];
+	snprintf(dst, sizeof(dst), "%s/addst", tmpbase);
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst));
 }
 
 static void test_apply_entry_follows_symlink_for_file(void)
@@ -458,9 +511,12 @@ int main(void)
 	RUN_TEST(test_link_file_migrate_directory);
 	RUN_TEST(test_link_file_dry_run_new);
 	RUN_TEST(test_link_file_dry_run_migrate);
+	RUN_TEST(test_bind_mount_dry_run);
+	RUN_TEST(test_bind_mount_rootfs_mode);
 	RUN_TEST(test_apply_entry_dispatches_file);
 	RUN_TEST(test_apply_entry_dispatches_dir);
 	RUN_TEST(test_apply_entry_dispatches_link);
+	RUN_TEST(test_apply_entry_dispatches_bind_dry_run);
 	RUN_TEST(test_apply_entry_follows_symlink_for_file);
 
 	return UNITY_END();
