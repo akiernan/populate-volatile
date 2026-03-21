@@ -45,6 +45,17 @@ void setUp(void)
 	if (mkdtemp(tmpbase) == NULL)
 		err(1, "mkdtemp");
 
+	/*
+	 * Canonicalise tmpbase so ctx.rootdir and dst_full use the real path.
+	 * The kernel resolves symlinks when recording mount points in
+	 * /proc/self/mountinfo, so pv_is_mounted() must compare against the
+	 * same canonical path (e.g. /tmp may be a symlink to /run/tmp).
+	 */
+	char resolved[PATH_MAX];
+	if (realpath(tmpbase, resolved) == NULL)
+		err(1, "realpath");
+	snprintf(tmpbase, sizeof(tmpbase), "%s", resolved);
+
 	rootfd = open(tmpbase, O_RDONLY | O_DIRECTORY);
 	if (rootfd == -1)
 		err(1, "open tmpbase");
