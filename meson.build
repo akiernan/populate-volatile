@@ -69,7 +69,7 @@ libpv_dep = declare_dependency(
 # Executable: populate-volatile
 # --------------------------------------------------------------------------
 
-executable('populate-volatile',
+pv_exe = executable('populate-volatile',
   sources     : ['src/main.c'],
   dependencies: libpv_dep,
   c_args      : common_args,
@@ -107,6 +107,22 @@ test('bind_mount',
   ),
   timeout : 30,
 )
+
+# --------------------------------------------------------------------------
+# Integration tests (shell scripts; exercise the compiled binary end-to-end)
+# --------------------------------------------------------------------------
+
+sh = find_program('sh')
+
+foreach t : ['dirs', 'files', 'symlinks', 'migration', 'ordering', 'usercheck', 'dryrun']
+  test('integration_' + t,
+    sh,
+    args    : [meson.project_source_root() / 'tests/integration/test_' + t + '.sh',
+               pv_exe.full_path()],
+    depends : pv_exe,
+    timeout : 30,
+  )
+endforeach
 
 summary({
   'description' : 'Set up volatile directories from declarative config at boot or rootfs build time',
