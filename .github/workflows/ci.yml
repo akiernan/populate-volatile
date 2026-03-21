@@ -58,7 +58,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            meson ninja-build gcc
+            meson ninja-build gcc libc6-dev
 
       - name: Configure
         run: meson setup build -Dc_std=c99 -Dwarning_level=2
