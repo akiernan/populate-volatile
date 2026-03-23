@@ -114,7 +114,7 @@ test('bind_mount',
 
 sh = find_program('sh')
 
-foreach t : ['dirs', 'files', 'symlinks', 'migration', 'ordering', 'usercheck', 'dryrun']
+foreach t : ['dirs', 'files', 'symlinks', 'migration', 'ordering', 'usercheck', 'dryrun', 'follow_symlink']
   test('integration_' + t,
     sh,
     args    : [meson.project_source_root() / 'tests/integration/test_' + t + '.sh',

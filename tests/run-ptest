@@ -53,13 +53,7 @@ for suite in test_config test_path test_validate test_ops test_bind_mount; do
     run_suite "./$suite" || rc=1
 done
 
-for script in integration/test_dirs.sh \
-              integration/test_files.sh \
-              integration/test_symlinks.sh \
-              integration/test_migration.sh \
-              integration/test_ordering.sh \
-              integration/test_usercheck.sh \
-              integration/test_dryrun.sh; do
+for script in integration/test_*.sh; do
     run_integration "./$script" || rc=1
 done
 
