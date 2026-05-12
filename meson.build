@@ -17,7 +17,7 @@ cc = meson.get_compiler('c')
 # --------------------------------------------------------------------------
 
 if not cc.has_header('err.h')
-  error('err.h not found — glibc or musl required')
+  error('err.h not found - glibc or musl required')
 endif
 
 # --------------------------------------------------------------------------
@@ -26,10 +26,10 @@ endif
 
 # _DEFAULT_SOURCE (glibc) / musl ignores feature-test macros so all of the
 # below is visible regardless:
-#   DT_DIR, DT_UNKNOWN  — dirent d_type constants
-#   O_NOFOLLOW          — fcntl open flag
-#   mkdtemp             — stdlib temp dir creation (tests)
-#   strtok_r            — POSIX reentrant tokeniser
+#   DT_DIR, DT_UNKNOWN  - dirent d_type constants
+#   O_NOFOLLOW          - fcntl open flag
+#   mkdtemp             - stdlib temp dir creation (tests)
+#   strtok_r            - POSIX reentrant tokeniser
 posix_args = ['-D_DEFAULT_SOURCE']
 
 # Promote a useful set of warnings.  -Wno-unused-parameter keeps the build

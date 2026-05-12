@@ -23,7 +23,7 @@ assert_dir "var/volatile/tmp" 1777
 
 # Verify 00_core runs before alphabetically-earlier names when they are
 # discovered together.  "00_core" < "00_aaa" alphabetically, but that's
-# fine — we just need 00_core to be first.
+# fine - we just need 00_core to be first.
 write_cfg "00_aaa" "d root root 0755 /from_aaa none"
 
 run_pv

@@ -53,7 +53,7 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry);
 
 /*
  * Bind-mount entry->ltarget onto entry->name via mount(MS_BIND).
- * Calls err() on failure — assumes caller has CAP_SYS_ADMIN.
+ * Calls err() on failure - assumes caller has CAP_SYS_ADMIN.
  */
 int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry);
 

@@ -293,7 +293,7 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz)
 		*slash = '\0'; /* abscopy is now the dirname */
 		n = snprintf(buf, bufsz, "%s/%s", abscopy, target);
 	} else {
-		/* no slash at all — shouldn't happen since abspath starts with '/' */
+		/* no slash at all - shouldn't happen since abspath starts with '/' */
 		n = snprintf(buf, bufsz, "/%s", target);
 	}
 
@@ -424,7 +424,7 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 		struct stat st;
 		if (fstatat(rootfd, candidate, &st, AT_SYMLINK_NOFOLLOW) == -1 ||
 		    !S_ISLNK(st.st_mode)) {
-			/* Not a symlink (or missing — will fail later): accept */
+			/* Not a symlink (or missing - will fail later): accept */
 			TRACE("component \"%s\": not a symlink -> accept", comp);
 			n = snprintf(resolved, sizeof(resolved), "%s", candidate);
 			if (n < 0 || (size_t)n >= sizeof(resolved)) {
@@ -461,7 +461,7 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 		 *
 		 * Absolute target: restart from rootfd root (clear resolved).
 		 * Relative target: resolve relative to dirname(candidate),
-		 *   which is `resolved` — prepend it so the traversal stays
+		 *   which is `resolved` - prepend it so the traversal stays
 		 *   within the rootfd tree.
 		 */
 		if (target[0] == '/') {

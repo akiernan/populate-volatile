@@ -243,7 +243,7 @@ static void test_resolve_path_final_component_not_resolved(void)
 {
 	/*
 	 * When the path itself is the symlink (final component), it must be
-	 * returned verbatim — the caller may be creating or inspecting it.
+	 * returned verbatim - the caller may be creating or inspecting it.
 	 */
 	pv_mkdirtree(tmpfd, "var", 0755);
 	symlinkat("/var/volatile/log", tmpfd, "var/log");

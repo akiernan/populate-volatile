@@ -20,7 +20,7 @@ TYPE  USER  GROUP  MODE  NAME  LTARGET
 | USER / GROUP | owner name |
 | MODE | octal permission bits, e.g. `0755` |
 | NAME | absolute destination path (no rootdir prefix) |
-| LTARGET | source path for `f`/`b`, link target for `l`; `none` → empty |
+| LTARGET | source path for `f`/`b`, link target for `l`; `none` -> empty |
 
 ## Usage
 
@@ -64,6 +64,6 @@ This project is licensed under the **GNU General Public License v2.0 only**
 (`LICENSE.txt`).
 
 The Unity test framework vendored in `tests/unity/` is a separate work and is
-licensed under the **MIT license** — see the copyright header in
+licensed under the **MIT license** - see the copyright header in
 `tests/unity/unity.h`. Unity is used only for building the test suite and is
 not linked into the installed binary.

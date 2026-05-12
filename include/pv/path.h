@@ -31,7 +31,7 @@ int pv_mkdirtree(int dirfd, const char *path, mode_t mode);
 
 /*
  * Recursively remove the directory named `name` relative to parentfd.
- * Uses openat/readdir/unlinkat(AT_REMOVEDIR) — no execv.
+ * Uses openat/readdir/unlinkat(AT_REMOVEDIR) - no execv.
  * Does not follow symlinks out of the tree.
  * Returns 0 on success, -1 if any removal fails (continues on partial error).
  */

@@ -44,7 +44,7 @@ int pv_parse_line(const char *line, pv_entry_t *out)
 	}
 
 	if (i == 0)
-		return 1; /* blank or comment-only — skip */
+		return 1; /* blank or comment-only - skip */
 	if (i < 6) {
 		warnx("config: too few fields (%d, need 6): %s", i, line);
 		return -1;

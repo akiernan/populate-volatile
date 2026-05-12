@@ -188,7 +188,7 @@ static int exec_cp_a(const char *src, const char *dst)
 	/* cp may exit non-zero if the source was empty; that is acceptable */
 	if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
 		TRACE("cp exited %d (source may be empty)", WEXITSTATUS(status));
-		warnx("cp -a '%s/.' '%s' exited %d (may be empty — continuing)",
+		warnx("cp -a '%s/.' '%s' exited %d (may be empty - continuing)",
 		      src, dst, WEXITSTATUS(status));
 	} else {
 		TRACE("cp -> ok");
@@ -486,8 +486,8 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		 * target path itself is a symlink to a not-yet-existing
 		 * directory (e.g. /var/tmp -> /var/volatile/tmp where
 		 * /var/volatile is a tmpfs that is still being populated).
-		 * In that case, skip the content copy — the directory is
-		 * likely empty anyway — and fall through to create the
+		 * In that case, skip the content copy - the directory is
+		 * likely empty anyway - and fall through to create the
 		 * symlink, which is the critical step.
 		 */
 		const char *reltgt = entry->ltarget[0] == '/'

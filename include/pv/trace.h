@@ -17,7 +17,7 @@ extern int pv_trace;
  * trace lines appear immediately even when stdout is block-buffered
  * (e.g. when captured by systemd or another init system).  This is why
  * warn/warnx errors appeared before the verbose stdout lines in the
- * captured output — trace messages will do the same.
+ * captured output - trace messages will do the same.
  *
  * Format: "[trace] function_name: user-supplied message\n"
  */

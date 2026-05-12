@@ -32,9 +32,9 @@ Docker convenience wrapper (runs build + tests inside Ubuntu 24.04):
 
 ### Runtime flags
 
-- `-v` — verbose: log each action to stdout
-- `-n` — dry-run: implies `-v`; no filesystem changes made
-- `-T` — trace: emit detailed per-syscall diagnostics to stderr (unbuffered); useful for diagnosing failed operations. Controlled by global `int pv_trace` (defined in `lib/path.c`, declared in `include/pv/trace.h`).
+- `-v` - verbose: log each action to stdout
+- `-n` - dry-run: implies `-v`; no filesystem changes made
+- `-T` - trace: emit detailed per-syscall diagnostics to stderr (unbuffered); useful for diagnosing failed operations. Controlled by global `int pv_trace` (defined in `lib/path.c`, declared in `include/pv/trace.h`).
 
 ### Processing order
 
@@ -47,16 +47,16 @@ Docker convenience wrapper (runs build + tests inside Ubuntu 24.04):
 |---|---|
 | `lib/config.c` | Line parser (`pv_parse_line`) and file reader (`pv_parse_config`) using a callback |
 | `lib/ops.c` | Filesystem operations: `pv_create_file`, `pv_mkdir`, `pv_link_file`, `pv_bind_mount`, `pv_apply_entry` dispatcher |
-| `lib/validate.c` | `pv_check_requirements` — resolves users/groups via `getpwnam`/`getgrnam` |
+| `lib/validate.c` | `pv_check_requirements` - resolves users/groups via `getpwnam`/`getgrnam` |
 | `lib/path.c` | Path utilities used by ops |
 
 All ops receive a `pv_ctx_t` (rootfd, rootdir, verbose, dry_run, rootfs_mode).
 
 ### Key types (`include/pv/`)
 
-- `pv_entry_t` — one parsed config record (type, user, group, mode, name, ltarget)
-- `pv_ctx_t` — operation context threaded through all ops functions
-- `pv_entry_cb` — callback signature used by `pv_parse_config`
+- `pv_entry_t` - one parsed config record (type, user, group, mode, name, ltarget)
+- `pv_ctx_t` - operation context threaded through all ops functions
+- `pv_entry_cb` - callback signature used by `pv_parse_config`
 
 ### Tests
 
@@ -64,4 +64,4 @@ Unity 2.5.2 is vendored in `tests/unity/` under the MIT license (see `tests/unit
 
 ## Licensing
 
-This project is **GPL-2.0-only** (`LICENSE.txt`). The vendored Unity test framework (`tests/unity/`) is licensed separately under the **MIT license** — see the header in `tests/unity/unity.h`.
+This project is **GPL-2.0-only** (`LICENSE.txt`). The vendored Unity test framework (`tests/unity/`) is licensed separately under the **MIT license** - see the header in `tests/unity/unity.h`.

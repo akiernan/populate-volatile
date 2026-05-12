@@ -125,7 +125,7 @@ static void test_create_file_copy_source(void)
 	/*
 	 * ltarget is an absolute path within the rootdir.  ops.c strips the
 	 * leading '/' and opens it relative to ctx->rootfd, so "/source.txt"
-	 * resolves to <rootdir>/source.txt — which is where we created it.
+	 * resolves to <rootdir>/source.txt - which is where we created it.
 	 */
 	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
 	                           0644, "/dest.txt", "/source.txt");

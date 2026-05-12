@@ -95,7 +95,7 @@ static int collect_cb(const pv_entry_t *entry, void *userdata)
 /* pv_parse_config callback that applies entries immediately via pv_apply_entry */
 static int apply_cb(const pv_entry_t *entry, void *userdata)
 {
-	/* userdata is pv_ctx_t * — errors are non-fatal here; keep going */
+	/* userdata is pv_ctx_t * - errors are non-fatal here; keep going */
 	pv_apply_entry((pv_ctx_t *)userdata, entry);
 	return 0;
 }
