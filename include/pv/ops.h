@@ -45,6 +45,9 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry);
  *      remove the directory with pv_rmtree(), then create the symlink.
  *      If the directory is mounted, skip with a warning.
  *   4. entry->name does not exist -> symlinkat().
+ *   5. entry->name exists but is neither symlink nor directory (e.g. a
+ *      regular file) -> unlink + symlinkat, matching the upstream shell
+ *      script's "ln -sf" (the contents are not migrated).
  *
  * In dry_run mode all filesystem-modifying steps are logged but not executed.
  * bind-mount check always uses /proc/self/mountinfo.

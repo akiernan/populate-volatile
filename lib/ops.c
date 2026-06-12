@@ -531,15 +531,30 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	} else {
 		/*
 		 * Exists but is not a symlink or directory (e.g. a regular
-		 * file).  Refuse rather than fall through to a symlinkat()
-		 * that can only fail EEXIST.
+		 * file).  Match the upstream shell script's "ln -sf":
+		 * replace it with the requested symlink.  As upstream, the
+		 * contents are not migrated anywhere.
 		 */
-		TRACE("fstatat(\"%s\") -> mode=%04o ifmt=0%o (not dir/link)",
+		TRACE("fstatat(\"%s\") -> mode=%04o ifmt=0%o (not dir/link)"
+		      " -> replace",
 		      relname, (unsigned)(st.st_mode & 07777),
 		      (unsigned)((st.st_mode & S_IFMT) >> 12));
-		warnx("link_file: %s exists and is not a directory or symlink",
-		      entry->name);
-		return op_fail(ctx);
+		if (ctx->dry_run) {
+			printf("[dry-run] ln -sf %s %s"
+			       "  (replacing existing non-directory)\n",
+			       entry->ltarget, entry->name);
+			return 0;
+		}
+		if (ctx->verbose)
+			printf("Replacing %s with symlink to %s\n",
+			       entry->name, entry->ltarget);
+		if (unlinkat(ctx->rootfd, relname, 0) == -1) {
+			TRACE("unlinkat(\"%s\") failed: %s",
+			      relname, strerror(errno));
+			warn("unlinkat: %s", entry->name);
+			return op_fail(ctx);
+		}
+		/* fall through to symlink creation */
 	}
 
 	/* --- Case 3 (after migration) or Case 4: create symlink --- */
