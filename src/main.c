@@ -71,7 +71,9 @@ typedef struct {
 /*
  * pv_parse_config callback: check the entry's own user/group requirements
  * (unless disabled for 00_core) and apply it.  Individual bad entries are
- * skipped rather than failing the whole file, matching the shell script.
+ * skipped rather than failing the whole file - a deliberate improvement
+ * over populate-volatile.sh, which skips an entire config file when any
+ * user or group in it is undefined.
  */
 static int apply_cb(const pv_entry_t *entry, void *userdata)
 {
@@ -306,8 +308,12 @@ int main(int argc, char *argv[])
 		err(EXIT_FAILURE, "discover_cfgfiles");
 
 	/* ----------------------------------------------------------------
-	 * Step 1: apply 00_core unconditionally and without req checking.
-	 * It sets up /var/volatile/tmp which check_requirements() needs.
+	 * Step 1: apply 00_core first, unconditionally and without
+	 * requirement checking, matching the shell script's ordering.
+	 * (Its original motive - check_requirements needed temp files
+	 * under /var/volatile/tmp, which 00_core creates - does not apply
+	 * to the getpwnam_r-based checks here, but later config files may
+	 * still rely on the core directories existing.)
 	 * -------------------------------------------------------------- */
 	int core_idx = -1;
 	for (int i = 0; i < nnames; i++) {

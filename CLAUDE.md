@@ -38,7 +38,7 @@ Docker convenience wrapper (runs build + tests inside Ubuntu 26.04):
 
 ### Processing order
 
-1. `00_core` is applied first, unconditionally and without user/group validation, because it creates `/var/volatile/tmp` which the requirement checker needs.
+1. `00_core` is applied first, unconditionally and without user/group validation, matching the upstream shell script's ordering; later config files may rely on the core directories it creates. (The script needed `/var/volatile/tmp` for its requirement checker's temp files; the `getpwnam_r`-based checks here do not.)
 2. All remaining config files apply entries individually; entries whose user/group don't exist are skipped.
 
 ### Library (`libpv`, static)
