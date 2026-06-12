@@ -70,9 +70,6 @@ within each section.
 - Mounted-directory migration skip (`pv_link_file` case 3) - can sit
   in the privileged suite next to `test_bind_mount` (note: the suite
   runs unprivileged via `unshare -rm`).
-- Long config lines: `pv_parse_config` reads into `PATH_MAX*3`;
-  longer lines are silently split by `fgets` and the tail parses as
-  garbage. Detect a missing `\n`, warn, and add a test.
 - `pv_link_file` with an existing regular file at NAME.
 
 ## Housekeeping

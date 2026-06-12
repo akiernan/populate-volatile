@@ -195,6 +195,41 @@ static void test_parse_config_missing_file(void)
 	TEST_ASSERT_EQUAL_INT(-1, r);
 }
 
+static void test_parse_config_overlong_line_skipped(void)
+{
+	char tmppath[] = "/tmp/pv_test_config_long_XXXXXX";
+	int fd = mkstemp(tmppath);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+
+	/*
+	 * One line longer than the parser's line buffer (PATH_MAX * 3),
+	 * sized so the continuation starts exactly at a chunk boundary and
+	 * would parse as a valid /evil entry if it were not discarded.
+	 */
+	size_t bufsz = (size_t)PATH_MAX * 3;
+	char *prefix = malloc(bufsz);
+	TEST_ASSERT_NOT_NULL(prefix);
+	memset(prefix, 'x', bufsz - 1);
+	prefix[0] = '#';
+	write(fd, prefix, bufsz - 1); /* fills one fgets() buffer exactly */
+	free(prefix);
+
+	const char *tail = "d root root 0755 /evil none\n"
+	                   "f root root 0644 /ok none\n";
+	write(fd, tail, strlen(tail));
+	close(fd);
+
+	pv_entry_t buf[4];
+	cb_state_t state = { buf, 0, 4 };
+
+	int r = pv_parse_config(AT_FDCWD, tmppath, collect_entries, &state);
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_INT(1, state.count);
+	TEST_ASSERT_EQUAL_STRING("/ok", state.entries[0].name);
+
+	unlink(tmppath);
+}
+
 static void test_parse_config_callback_abort(void)
 {
 	char tmppath[] = "/tmp/pv_test_config_abort_XXXXXX";
@@ -243,6 +278,7 @@ int main(void)
 	RUN_TEST(test_parse_line_invalid_mode);
 	RUN_TEST(test_parse_config_multiline);
 	RUN_TEST(test_parse_config_missing_file);
+	RUN_TEST(test_parse_config_overlong_line_skipped);
 	RUN_TEST(test_parse_config_callback_abort);
 
 	return UNITY_END();

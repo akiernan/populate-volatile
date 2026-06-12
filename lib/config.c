@@ -134,6 +134,22 @@ int pv_parse_config(int cfgfd, const char *path,
 	/* fd is now owned by f */
 
 	while (fgets(line, sizeof(line), f) != NULL) {
+		/*
+		 * A line that fills the buffer without a terminating newline
+		 * is longer than we support.  Discard the remainder so the
+		 * continuation is not misparsed as a separate line.
+		 */
+		size_t len = strlen(line);
+		if (len > 0 && line[len - 1] != '\n' && !feof(f)) {
+			int c;
+
+			warnx("%s: line too long (limit %zu bytes); skipping",
+			      path, sizeof(line) - 2);
+			while ((c = fgetc(f)) != EOF && c != '\n')
+				;
+			continue;
+		}
+
 		int r = pv_parse_line(line, &entry);
 		if (r == 1)
 			continue; /* skip blank/comment */
