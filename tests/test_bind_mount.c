@@ -125,6 +125,28 @@ static void test_bind_mount_idempotent(void)
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst_full));
 }
 
+static void test_is_mounted_via_symlinked_path(void)
+{
+	pv_entry_t e;
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_BIND;
+	strcpy(e.name,    "/dst");
+	strcpy(e.ltarget, "/src");
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/*
+	 * Query the mountpoint through a symlink: mountinfo records the
+	 * canonical path, so a literal comparison would miss it.
+	 */
+	TEST_ASSERT_EQUAL_INT(0, symlinkat("dst", rootfd, "lnk"));
+
+	char lnk[sizeof(tmpbase) + 16];
+	snprintf(lnk, sizeof(lnk), "%s/lnk", tmpbase);
+
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted(lnk));
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted_mountinfo(lnk));
+}
+
 static void test_link_file_skips_mounted_dir(void)
 {
 	pv_entry_t e;
@@ -202,6 +224,7 @@ int main(void)
 	UNITY_BEGIN();
 	RUN_TEST(test_bind_mount_creates_mount);
 	RUN_TEST(test_bind_mount_idempotent);
+	RUN_TEST(test_is_mounted_via_symlinked_path);
 	RUN_TEST(test_link_file_skips_mounted_dir);
 	RUN_TEST(test_apply_entry_dispatches_bind);
 	return UNITY_END();

@@ -12,11 +12,7 @@ within each section.
 
 ## Security hardening
 
-- **`pv_is_mounted` compares literal strings** (`lib/path.c`):
-  mountinfo records the canonical mount point, so a path reaching
-  the mountpoint through a symlinked component yields a false
-  negative and `pv_link_file` will attempt to migrate (rmtree) a
-  live mountpoint. Normalise before comparing, or document.
+(none outstanding)
 
 ## Cleanups / redundant abstractions
 

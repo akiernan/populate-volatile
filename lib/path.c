@@ -8,6 +8,9 @@
  * with no dependence on the process working directory or absolute host paths.
  */
 
+/* statx() and STATX_* are exposed under _GNU_SOURCE (glibc and musl) */
+#define _GNU_SOURCE
+
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -550,23 +553,38 @@ void pv_unescape_mountinfo(char *s)
 }
 
 /*
- * pv_is_mounted -- check whether path is a mountpoint.
+ * pv_is_mounted_mountinfo -- mountpoint check via /proc/self/mountinfo.
  *
- * Parses /proc/self/mountinfo and checks field 5 (the mount point)
- * against path.  Field numbering is 1-based per the kernel docs.
+ * Fallback for pv_is_mounted() on kernels without STATX_ATTR_MOUNT_ROOT;
+ * exposed separately so the tests can exercise it directly.
+ *
+ * The kernel records mount points canonically (symlinks resolved), so
+ * the queried path is canonicalised with realpath() before comparing
+ * against field 5; if realpath fails (e.g. the path does not exist) the
+ * literal path is compared.
  *
  * Mount point names with embedded spaces are encoded as \NNN octal
  * sequences in mountinfo; we unescape before comparing.
  *
  * Returns 1 if path is a mountpoint, 0 if not, -1 on error.
  */
-int pv_is_mounted(const char *path)
+int pv_is_mounted_mountinfo(const char *path)
 {
 	FILE *f;
 	char line[4096];
+	char real[PATH_MAX];
 	int found = 0;
 
 	TRACE("checking \"%s\"", path);
+
+	if (realpath(path, real) != NULL) {
+		if (strcmp(real, path) != 0)
+			TRACE("canonicalised \"%s\" -> \"%s\"", path, real);
+		path = real;
+	} else {
+		TRACE("realpath(\"%s\") failed (%s) -> comparing literally",
+		      path, strerror(errno));
+	}
 
 	f = fopen("/proc/self/mountinfo", "r");
 	if (f == NULL) {
@@ -575,11 +593,19 @@ int pv_is_mounted(const char *path)
 	}
 
 	while (!found && fgets(line, sizeof(line), f) != NULL) {
+		size_t len = strlen(line);
+		int truncated = len > 0 && line[len - 1] != '\n' && !feof(f);
+
 		/*
 		 * Fields are space-separated.  We want field 5 (0-based: 4).
 		 *
 		 *  36 30 8:1 / /boot rw,relatime - ext4 /dev/sda1 rw
 		 *  ^0 ^1 ^2  ^3 ^4
+		 *
+		 * Field 5 sits well inside even a truncated chunk, so an
+		 * overlong line (huge mount options) is still parsed; the
+		 * remainder is drained below so it cannot masquerade as a
+		 * fresh line.
 		 */
 		char *saveptr;
 		char *tok = strtok_r(line, " \t", &saveptr);
@@ -597,10 +623,69 @@ int pv_is_mounted(const char *path)
 			tok = strtok_r(NULL, " \t", &saveptr);
 			field++;
 		}
+
+		if (truncated) {
+			int c;
+			while ((c = fgetc(f)) != EOF && c != '\n')
+				;
+		}
 	}
 
 	fclose(f);
 	if (!found)
 		TRACE("\"%s\" not found in /proc/self/mountinfo", path);
 	return found;
+}
+
+/*
+ * pv_is_mounted -- check whether path is a mountpoint.
+ *
+ * Preferred implementation asks the kernel directly via
+ * statx(STATX_ATTR_MOUNT_ROOT), which is immune to path-spelling
+ * differences (symlinked components etc.).  Availability is detected at
+ * runtime: ENOSYS/EINVAL/EPERM mean the syscall is absent or blocked
+ * (pre-4.11 kernel, seccomp), and a clear stx_attributes_mask bit means
+ * the kernel predates the attribute (added in 5.8).  Both fall back to
+ * the mountinfo parser above.
+ *
+ * Returns 1 if path is a mountpoint, 0 if not, -1 on error.
+ */
+int pv_is_mounted(const char *path)
+{
+#ifdef HAVE_STATX_MOUNT_ROOT
+	static int statx_usable = 1;
+
+	if (statx_usable) {
+		struct statx stx;
+
+		if (statx(AT_FDCWD, path, 0, 0, &stx) == 0) {
+			if (stx.stx_attributes_mask & STATX_ATTR_MOUNT_ROOT) {
+				int mounted = (stx.stx_attributes &
+				               STATX_ATTR_MOUNT_ROOT) != 0;
+				TRACE("statx(\"%s\") -> mount_root=%d",
+				      path, mounted);
+				return mounted;
+			}
+			TRACE("statx: kernel lacks STATX_ATTR_MOUNT_ROOT"
+			      " -> mountinfo fallback");
+			statx_usable = 0;
+		} else if (errno == ENOSYS || errno == EINVAL ||
+		           errno == EPERM) {
+			TRACE("statx unavailable (%s) -> mountinfo fallback",
+			      strerror(errno));
+			statx_usable = 0;
+		} else if (errno == ENOENT || errno == ENOTDIR) {
+			/* Path doesn't exist: not a mountpoint */
+			TRACE("statx(\"%s\"): %s -> not mounted",
+			      path, strerror(errno));
+			return 0;
+		} else {
+			TRACE("statx(\"%s\") failed: %s",
+			      path, strerror(errno));
+			warn("statx: %s", path);
+			return -1;
+		}
+	}
+#endif
+	return pv_is_mounted_mountinfo(path);
 }

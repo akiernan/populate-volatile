@@ -73,10 +73,21 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz);
 void pv_unescape_mountinfo(char *s);
 
 /*
- * Check whether path appears as a mountpoint (field 5) in
- * /proc/self/mountinfo.
+ * Check whether path is a mountpoint.
+ *
+ * Uses statx(STATX_ATTR_MOUNT_ROOT) when the kernel supports it
+ * (>= 5.8, probed at runtime), falling back to pv_is_mounted_mountinfo().
  * Returns 1 if mounted, 0 if not, -1 on error.
  */
 int pv_is_mounted(const char *path);
+
+/*
+ * Fallback implementation: canonicalise path with realpath(), then look
+ * for it as a mount point (field 5) in /proc/self/mountinfo.  Exposed
+ * separately so tests can exercise it on kernels where pv_is_mounted()
+ * takes the statx path.
+ * Returns 1 if mounted, 0 if not, -1 on error.
+ */
+int pv_is_mounted_mountinfo(const char *path);
 
 #endif /* PV_PATH_H */

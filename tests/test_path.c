@@ -466,6 +466,28 @@ static void test_is_mounted_not_mounted(void)
 	TEST_ASSERT_EQUAL_INT(0, r);
 }
 
+static void test_is_mounted_mountinfo_fallback(void)
+{
+	/* Exercise the fallback directly: statx may shadow it elsewhere */
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted_mountinfo("/"));
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted_mountinfo(tmpbase));
+}
+
+static void test_is_mounted_through_symlink(void)
+{
+	/*
+	 * A mountpoint reached via a symlink must still be recognised:
+	 * statx resolves it in the kernel, the fallback via realpath().
+	 */
+	symlinkat("/", tmpfd, "rootlink");
+
+	char lnk[sizeof(tmpbase) + 16];
+	snprintf(lnk, sizeof(lnk), "%s/rootlink", tmpbase);
+
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted(lnk));
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted_mountinfo(lnk));
+}
+
 /* -------------------------------------------------------------------------
  * Test runner
  * ---------------------------------------------------------------------- */
@@ -508,6 +530,8 @@ int main(void)
 	RUN_TEST(test_unescape_backslash_not_octal);
 	RUN_TEST(test_is_mounted_root);
 	RUN_TEST(test_is_mounted_not_mounted);
+	RUN_TEST(test_is_mounted_mountinfo_fallback);
+	RUN_TEST(test_is_mounted_through_symlink);
 
 	return UNITY_END();
 }

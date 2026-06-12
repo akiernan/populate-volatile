@@ -43,6 +43,18 @@ extra_warnings = cc.get_supported_arguments([
 
 common_args = posix_args + extra_warnings
 
+# statx(STATX_ATTR_MOUNT_ROOT) is the preferred mountpoint check; it needs
+# both the libc wrapper and the attribute constant at build time.  Runtime
+# support (kernel >= 5.8) is probed separately in pv_is_mounted(), which
+# falls back to parsing /proc/self/mountinfo.
+have_statx = cc.has_function('statx',
+  prefix : '#define _GNU_SOURCE\n#include <sys/stat.h>')
+have_statx_mount_root = cc.has_header_symbol('sys/stat.h',
+  'STATX_ATTR_MOUNT_ROOT', prefix : '#define _GNU_SOURCE')
+if have_statx and have_statx_mount_root
+  common_args += '-DHAVE_STATX_MOUNT_ROOT'
+endif
+
 # --------------------------------------------------------------------------
 # cp(1) location
 #
