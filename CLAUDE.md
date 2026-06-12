@@ -18,7 +18,7 @@ meson test -C build --print-errorlogs
 meson test -C build --print-errorlogs config   # or path / validate / ops
 ```
 
-Docker convenience wrapper (runs build + tests inside Ubuntu 24.04):
+Docker convenience wrapper (runs build + tests inside Ubuntu 26.04):
 
 ```sh
 ./docker-build.sh           # glibc

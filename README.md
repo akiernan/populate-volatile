@@ -39,7 +39,7 @@ populate-volatile [-v] [-n] [-r <rootdir>] [-C <cfgdir>] [<cfgfile> ...]
 
 Requires meson + ninja and a C99 compiler (gcc or clang) with glibc or musl.
 
-A Docker wrapper runs the full build matrix inside Ubuntu 24.04:
+A Docker wrapper runs the full build matrix inside Ubuntu 26.04:
 
 ```sh
 ./docker-build.sh            # gcc + glibc
