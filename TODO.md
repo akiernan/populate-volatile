@@ -12,14 +12,6 @@ within each section.
 
 ## Security hardening
 
-- **`..` escapes the rootfd tree in rootfs mode** (`lib/path.c`):
-  `pv_resolve_path` treats `..` as an ordinary component and
-  `pv_readlink_abs` deliberately emits `a/../b` paths for the kernel
-  to resolve. `rootfd` is not a chroot, so a `..` chain in a config
-  NAME or a staged symlink target (`../../../etc`) resolves above
-  the staging directory and writes to the **host** during do_rootfs.
-  Mitigate: reject `..` after resolution, or use
-  `openat2(RESOLVE_BENEATH)` with a lexical fallback.
 - **`pv_is_mounted` compares literal strings** (`lib/path.c`):
   mountinfo records the canonical mount point, so a path reaching
   the mountpoint through a symlinked component yields a false
@@ -36,8 +28,6 @@ within each section.
 
 ## Test gaps
 
-- `..` traversal behaviour in `pv_resolve_path`/`pv_readlink_abs` -
-  pin down whatever the hardening above decides.
 - `discover_cfgfiles` `DT_UNKNOWN` fallback - the regular-file
   filter is now integration-tested, but the stat fallback cannot be
   exercised on tmpfs/ext4; would need extraction from main.c for a

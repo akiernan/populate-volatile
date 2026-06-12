@@ -700,6 +700,29 @@ int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			memmove(e.name + 1, resolved, strlen(resolved) + 1);
 			e.name[0] = '/';
 		}
+
+		/*
+		 * The link target may itself contain ".." components or
+		 * absolute symlinks; in rootfs mode confine it to the
+		 * staging tree just like the original name, so it cannot
+		 * escape to the host.
+		 */
+		if (ctx->rootfs_mode) {
+			char confined[PATH_MAX];
+			if (pv_resolve_path(ctx->rootfd, e.name,
+			                    confined, sizeof(confined)) == 0) {
+				if (strcmp(confined, e.name) != 0)
+					TRACE("rootfs confine: \"%s\" -> \"%s\"",
+					      e.name, confined);
+				int n = snprintf(e.name, sizeof(e.name),
+				                 "%s", confined);
+				if (n < 0 || (size_t)n >= sizeof(e.name)) {
+					warnx("apply_entry: confined path too long: %s",
+					      confined);
+					return 0; /* non-fatal in rootfs mode */
+				}
+			}
+		}
 	}
 
 	if (ctx->verbose)

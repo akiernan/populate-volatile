@@ -54,6 +54,10 @@ int pv_readlink_abs(int dirfd, const char *abspath, char *buf, size_t bufsz);
  * as if rootfd were "/": absolute symlink targets are interpreted relative
  * to rootfd rather than the host root.
  *
+ * "." and ".." components are resolved lexically; ".." is clamped at the
+ * root (as the kernel clamps "/.."), so the result can never climb out of
+ * the rootfd tree.
+ *
  * Only intermediate components are resolved; the final component is appended
  * verbatim so callers can create it even when it does not yet exist.
  *

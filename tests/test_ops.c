@@ -595,6 +595,32 @@ static void test_apply_entry_follows_symlink_for_file(void)
 	TEST_ASSERT_EQUAL_INT(0, r);
 }
 
+static void test_apply_entry_rootfs_confines_escaping_symlink(void)
+{
+	/*
+	 * A staged symlink whose target climbs out of the root tree
+	 * ("/../escapee" resolves to the host directory *containing*
+	 * tmpbase, i.e. /tmp) must be confined: the file is created
+	 * inside the tree, never beside it on the host.
+	 */
+	ctx.rootfs_mode = 1;
+
+	TEST_ASSERT_EQUAL_INT(0, symlinkat("/../escapee", tmpfd, "esc"));
+	unlink("/tmp/escapee"); /* remove any stale canary */
+
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
+	                          0644, "/esc", NULL);
+	TEST_ASSERT_EQUAL_INT(0, pv_apply_entry(&ctx, &e));
+
+	struct stat st;
+	/* Created inside the root tree... */
+	TEST_ASSERT_EQUAL_INT(0, fstatat(tmpfd, "escapee", &st,
+	                                 AT_SYMLINK_NOFOLLOW));
+	TEST_ASSERT_TRUE(S_ISREG(st.st_mode));
+	/* ...and not on the host */
+	TEST_ASSERT_EQUAL_INT(-1, stat("/tmp/escapee", &st));
+}
+
 /* -------------------------------------------------------------------------
  * Test runner
  * ---------------------------------------------------------------------- */
@@ -631,6 +657,7 @@ int main(void)
 	RUN_TEST(test_apply_entry_dispatches_link);
 	RUN_TEST(test_apply_entry_dispatches_bind_dry_run);
 	RUN_TEST(test_apply_entry_follows_symlink_for_file);
+	RUN_TEST(test_apply_entry_rootfs_confines_escaping_symlink);
 
 	return UNITY_END();
 }

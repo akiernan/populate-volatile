@@ -325,6 +325,73 @@ static void test_resolve_path_relative_symlink_loop(void)
 	TEST_ASSERT_EQUAL_INT(-1, r);
 }
 
+static void test_resolve_path_dotdot_normalized(void)
+{
+	pv_mkdirtree(tmpfd, "var", 0755);
+	pv_mkdirtree(tmpfd, "etc", 0755);
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/../etc/file", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/etc/file", buf);
+}
+
+static void test_resolve_path_dotdot_clamped_at_root(void)
+{
+	/* ".." chains cannot climb above the root: clamped like "/.." */
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/../../etc/file", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/etc/file", buf);
+}
+
+static void test_resolve_path_dotdot_final(void)
+{
+	pv_mkdirtree(tmpfd, "a", 0755);
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/a/..", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/", buf);
+}
+
+static void test_resolve_path_dot_skipped(void)
+{
+	pv_mkdirtree(tmpfd, "var/run", 0755);
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/./run/./foo", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/var/run/foo", buf);
+}
+
+static void test_resolve_path_symlink_dotdot_confined(void)
+{
+	/* An absolute symlink target trying to climb out stays confined */
+	symlinkat("/../../outside", tmpfd, "evil");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/evil/x", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/outside/x", buf);
+}
+
+static void test_resolve_path_relative_symlink_dotdot(void)
+{
+	/*
+	 * var/run -> ../volatile/run: the ".." resolves against "var",
+	 * landing on the top-level volatile/run within the tree.
+	 */
+	pv_mkdirtree(tmpfd, "var", 0755);
+	pv_mkdirtree(tmpfd, "volatile/run", 0755);
+	symlinkat("../volatile/run", tmpfd, "var/run");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/run/foo", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/volatile/run/foo", buf);
+}
+
 static void test_resolve_path_nonexistent_intermediate(void)
 {
 	/*
@@ -427,6 +494,12 @@ int main(void)
 	RUN_TEST(test_resolve_path_relative_then_absolute_symlink);
 	RUN_TEST(test_resolve_path_symlink_loop);
 	RUN_TEST(test_resolve_path_relative_symlink_loop);
+	RUN_TEST(test_resolve_path_dotdot_normalized);
+	RUN_TEST(test_resolve_path_dotdot_clamped_at_root);
+	RUN_TEST(test_resolve_path_dotdot_final);
+	RUN_TEST(test_resolve_path_dot_skipped);
+	RUN_TEST(test_resolve_path_symlink_dotdot_confined);
+	RUN_TEST(test_resolve_path_relative_symlink_dotdot);
 	RUN_TEST(test_resolve_path_nonexistent_intermediate);
 	RUN_TEST(test_unescape_space);
 	RUN_TEST(test_unescape_no_escapes);

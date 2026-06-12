@@ -397,6 +397,40 @@ int pv_resolve_path(int rootfd, const char *abspath, char *buf, size_t bufsz)
 			continue;
 		}
 
+		/*
+		 * "." and ".." are handled lexically against the resolved
+		 * prefix so the path cannot climb out of the rootfd tree.
+		 * ".." at the root is clamped, exactly as the kernel clamps
+		 * "/.." at the real root.  This matters because rootfd is
+		 * not a chroot: a ".." left in the output would be resolved
+		 * by the kernel against the host parent directory.
+		 */
+		if (strcmp(comp, ".") == 0 || strcmp(comp, "..") == 0) {
+			if (comp[1] == '.') {
+				char *rs = strrchr(resolved, '/');
+				if (rs != NULL)
+					*rs = '\0';
+				else
+					resolved[0] = '\0';
+				TRACE("\"..\" -> resolved=\"%s\"", resolved);
+			}
+			if (rest[0] == '\0') {
+				n = snprintf(buf, bufsz, "/%s", resolved);
+				if (n < 0 || (size_t)n >= bufsz) {
+					warnx("pv_resolve_path: result too long");
+					return -1;
+				}
+				TRACE("result (dot component): \"%s\"", buf);
+				return 0;
+			}
+			n = snprintf(work, sizeof(work), "%s", rest);
+			if (n < 0 || (size_t)n >= sizeof(work)) {
+				warnx("pv_resolve_path: path too long");
+				return -1;
+			}
+			continue;
+		}
+
 		/* Build candidate = resolved + "/" + comp */
 		if (resolved[0] == '\0')
 			n = snprintf(candidate, sizeof(candidate), "%s", comp);
