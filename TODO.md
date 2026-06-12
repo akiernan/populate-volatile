@@ -64,8 +64,6 @@ within each section.
 
 - `..` traversal behaviour in `pv_resolve_path`/`pv_readlink_abs` -
   pin down whatever the hardening above decides.
-- rootfs-mode error suppression paths, including the uid=0/gid=0
-  fallback after a failed `resolve_ids`.
 - `discover_cfgfiles` - no unit test (the dead-code bug would have
   been caught); only indirectly covered by the ordering integration
   test.

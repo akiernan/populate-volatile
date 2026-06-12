@@ -184,6 +184,77 @@ static void test_create_file_dry_run(void)
  * pv_mkdir tests
  * ---------------------------------------------------------------------- */
 
+static void test_create_file_missing_source_fails(void)
+{
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
+	                          0644, "/copy", "/nosuch");
+	TEST_ASSERT_EQUAL_INT(-1, pv_create_file(&ctx, &e));
+
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(-1, fstatat(tmpfd, "copy", &st,
+	                                  AT_SYMLINK_NOFOLLOW));
+}
+
+static void test_create_file_missing_source_rootfs_mode(void)
+{
+	/* rootfs mode: same failure is suppressed so do_rootfs continues */
+	ctx.rootfs_mode = 1;
+
+	pv_entry_t e = make_entry(PV_TYPE_FILE, test_user, test_group,
+	                          0644, "/copy", "/nosuch");
+	TEST_ASSERT_EQUAL_INT(0, pv_create_file(&ctx, &e));
+
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(-1, fstatat(tmpfd, "copy", &st,
+	                                  AT_SYMLINK_NOFOLLOW));
+}
+
+static void test_create_file_unknown_user_fails(void)
+{
+	pv_entry_t e = make_entry(PV_TYPE_FILE, "pv_no_such_user",
+	                          "pv_no_such_group", 0644, "/uf", NULL);
+	TEST_ASSERT_EQUAL_INT(-1, pv_create_file(&ctx, &e));
+
+	/* Failure happens before creation: nothing left behind */
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(-1, fstatat(tmpfd, "uf", &st,
+	                                  AT_SYMLINK_NOFOLLOW));
+}
+
+static void test_create_file_unknown_user_rootfs_mode(void)
+{
+	/*
+	 * rootfs mode: unknown user falls back to uid 0 / gid 0 and the
+	 * (unprivileged) failed chown is suppressed; the file must still
+	 * be created with the requested mode.
+	 */
+	ctx.rootfs_mode = 1;
+
+	pv_entry_t e = make_entry(PV_TYPE_FILE, "pv_no_such_user",
+	                          "pv_no_such_group", 0644, "/uf", NULL);
+	TEST_ASSERT_EQUAL_INT(0, pv_create_file(&ctx, &e));
+
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(0, fstatat(tmpfd, "uf", &st,
+	                                 AT_SYMLINK_NOFOLLOW));
+	TEST_ASSERT_TRUE(S_ISREG(st.st_mode));
+	TEST_ASSERT_EQUAL_UINT(0644, st.st_mode & 07777);
+}
+
+static void test_mkdir_unknown_user_rootfs_mode(void)
+{
+	ctx.rootfs_mode = 1;
+
+	pv_entry_t e = make_entry(PV_TYPE_DIR, "pv_no_such_user",
+	                          "pv_no_such_group", 0755, "/ud", NULL);
+	TEST_ASSERT_EQUAL_INT(0, pv_mkdir(&ctx, &e));
+
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(0, fstatat(tmpfd, "ud", &st,
+	                                 AT_SYMLINK_NOFOLLOW));
+	TEST_ASSERT_TRUE(S_ISDIR(st.st_mode));
+}
+
 static void test_mkdir_creates_dir(void)
 {
 	pv_entry_t e = make_entry(PV_TYPE_DIR, test_user, test_group,
@@ -501,6 +572,11 @@ int main(void)
 	RUN_TEST(test_create_file_copy_source);
 	RUN_TEST(test_create_file_skips_existing);
 	RUN_TEST(test_create_file_dry_run);
+	RUN_TEST(test_create_file_missing_source_fails);
+	RUN_TEST(test_create_file_missing_source_rootfs_mode);
+	RUN_TEST(test_create_file_unknown_user_fails);
+	RUN_TEST(test_create_file_unknown_user_rootfs_mode);
+	RUN_TEST(test_mkdir_unknown_user_rootfs_mode);
 	RUN_TEST(test_mkdir_creates_dir);
 	RUN_TEST(test_mkdir_creates_deep);
 	RUN_TEST(test_mkdir_skips_existing);
