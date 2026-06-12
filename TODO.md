@@ -18,11 +18,9 @@ in discover_cfgfiles" onwards). What remains is below.
 
 ## Verification
 
-- Run `./docker-build.sh all` (glibc, musl, clang) before release;
-  the development sandbox only covers glibc.  Of note for musl:
-  whether its headers provide `STATX_ATTR_MOUNT_ROOT` decides if the
-  statx mountpoint check is compiled in or the build is
-  fallback-only (both are correct).
+- `./docker-build.sh all` (glibc, musl, clang) passed 2026-06-12:
+  14 OK + 1 skip each (bind_mount needs CAP_SYS_ADMIN, absent in
+  unprivileged containers; covered locally via `unshare -rm`).
 
 ## Downstream notes for the next release
 
