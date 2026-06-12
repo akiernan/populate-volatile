@@ -141,7 +141,7 @@ int pv_parse_config(int cfgfd, const char *path,
 			continue; /* parse error already warned; keep going */
 
 		TRACE("parsed: type=%c user=%s group=%s mode=%04o name=\"%s\" ltarget=\"%s\"",
-		      "fdlb"[entry.type], entry.user, entry.group,
+		      (char)entry.type, entry.user, entry.group,
 		      (unsigned)entry.mode, entry.name, entry.ltarget);
 
 		r = cb(&entry, userdata);

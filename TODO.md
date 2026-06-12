@@ -8,10 +8,6 @@ within each section.
 
 ## Bugs
 
-- **Out-of-bounds read in parse trace** (`lib/config.c`,
-  `pv_parse_config` TRACE): `"fdlb"[entry.type]` indexes a 5-byte
-  string literal with the enum's character value (`'f'` == 102).
-  Only triggers with `-T`. Should be `(char)entry.type`.
 - **`copy_fd` does not retry `EINTR` on read** (`lib/ops.c`): the
   comment claims EINTR is handled on both syscalls, but an
   interrupted `read()` aborts the copy. Wrap the read in the same
