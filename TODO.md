@@ -8,12 +8,7 @@ within each section.
 
 ## Bugs
 
-- **`main()` always exits `EXIT_SUCCESS`** (`src/main.c`):
-  `apply_cb` discards `pv_apply_entry`'s return and nothing
-  aggregates failures, so init scripts / do_rootfs cannot detect
-  runtime failures. Decide on an exit-status contract and aggregate.
-  Relatedly the doc comment on `process_cfgfile` claims it returns 1
-  on requirement failure; it always returns 0.
+(none outstanding)
 
 ## Security hardening
 
@@ -44,9 +39,6 @@ within each section.
   testing `errno != EEXIST` after `pv_mkdirtree` fails is
   meaningless - it already swallows EEXIST internally and errno may
   be stale from its cleanup calls.
-- **Error-handling contract**: ops return -1, `apply_cb` ignores it,
-  bind mount used to exit (fixed). Pick one contract and follow it
-  through to the exit code (see exit-status bug above).
 
 ## Test gaps
 

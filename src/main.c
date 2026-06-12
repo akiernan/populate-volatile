@@ -17,6 +17,11 @@
  *   -n             Dry-run: log what would happen; make no filesystem changes.
  *                  Implies -v.
  *   <cfgfile>...   Process only these config files (paths relative to cfgdir).
+ *
+ * Exit status: 0 on success.  At runtime (no -r, or -r /), 1 if any config
+ * file could not be read or any entry failed to apply (entries skipped for
+ * an undefined user/group are not failures).  In rootfs mode errors are
+ * suppressed by design and the exit status is always 0.
  */
 
 #include <sys/types.h>
@@ -60,6 +65,7 @@ typedef struct {
 	const pv_ctx_t *ctx;
 	const char     *cfgname;
 	int             check_reqs;
+	int             failed;     /* any entry failed to apply */
 } apply_state_t;
 
 /*
@@ -74,11 +80,12 @@ static int apply_cb(const pv_entry_t *entry, void *userdata)
 	if (st->check_reqs && pv_check_requirements(entry, 1) != 0) {
 		warnx("Skipping %s %s (undefined user/group)",
 		      st->cfgname, entry->name);
-		return 0;
+		return 0; /* a skipped entry is not a failure */
 	}
 
-	/* Errors are non-fatal here; keep going */
-	pv_apply_entry(st->ctx, entry);
+	/* Errors are non-fatal here - keep going - but remembered */
+	if (pv_apply_entry(st->ctx, entry) == -1)
+		st->failed = 1;
 	return 0;
 }
 
@@ -183,7 +190,8 @@ static int discover_cfgfiles(int cfgfd, char ***names_out)
 /*
  * Apply a single config file, streaming entries through apply_cb.
  *   skip_reqs = 1 -> skip requirement checking (used for 00_core).
- * Returns 0; parse/apply errors are warned and processing continues.
+ * Returns 1 if the file could not be read or any entry failed to
+ * apply, 0 otherwise.  Errors are warned and processing continues.
  */
 static int process_cfgfile(const pv_ctx_t *ctx, int cfgfd,
                             const char *name, int skip_reqs)
@@ -192,13 +200,15 @@ static int process_cfgfile(const pv_ctx_t *ctx, int cfgfd,
 		.ctx        = ctx,
 		.cfgname    = name,
 		.check_reqs = !skip_reqs,
+		.failed     = 0,
 	};
 
 	if (ctx->verbose)
 		printf("Applying %s\n", name);
 
-	pv_parse_config(cfgfd, name, apply_cb, &st);
-	return 0;
+	if (pv_parse_config(cfgfd, name, apply_cb, &st) == -1)
+		return 1;
+	return st.failed;
 }
 
 /* -------------------------------------------------------------------------
@@ -279,6 +289,7 @@ int main(int argc, char *argv[])
 	 * -------------------------------------------------------------- */
 	char **names  = NULL;
 	int    nnames = 0;
+	int    failed = 0;
 
 	if (nexplicit > 0) {
 		/* Caller supplied explicit file names */
@@ -286,7 +297,7 @@ int main(int argc, char *argv[])
 		nnames = nexplicit;
 		/* No 00_core special case when files are explicitly listed */
 		for (int i = 0; i < nnames; i++)
-			process_cfgfile(&ctx, cfgfd, names[i], 0);
+			failed |= process_cfgfile(&ctx, cfgfd, names[i], 0);
 		goto done;
 	}
 
@@ -306,7 +317,8 @@ int main(int argc, char *argv[])
 		}
 	}
 	if (core_idx >= 0)
-		process_cfgfile(&ctx, cfgfd, names[core_idx], 1 /* skip_reqs */);
+		failed |= process_cfgfile(&ctx, cfgfd, names[core_idx],
+		                          1 /* skip_reqs */);
 
 	/* ----------------------------------------------------------------
 	 * Step 2: apply each non-core file individually.
@@ -315,7 +327,7 @@ int main(int argc, char *argv[])
 	for (int i = 0; i < nnames; i++) {
 		if (i == core_idx)
 			continue;
-		process_cfgfile(&ctx, cfgfd, names[i], 0);
+		failed |= process_cfgfile(&ctx, cfgfd, names[i], 0);
 	}
 
 	/* Free discovered names (not freed when explicit_files used) */
@@ -326,5 +338,13 @@ int main(int argc, char *argv[])
 done:
 	close(cfgfd);
 	close(rootfd);
+
+	/*
+	 * Runtime failures are reported so init can react.  In rootfs mode
+	 * errors are non-fatal by design (the target re-runs at first boot),
+	 * so do_rootfs must not see a failure.
+	 */
+	if (failed && !ctx.rootfs_mode)
+		return EXIT_FAILURE;
 	return EXIT_SUCCESS;
 }
