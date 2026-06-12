@@ -400,6 +400,41 @@ static void test_link_file_migrate_directory(void)
 	    fstatat(tmpfd, "var/volatile/log/messages", &st, 0));
 }
 
+static void test_link_file_existing_regular_file(void)
+{
+	/* A regular file in the way is refused and left untouched */
+	int fd = openat(tmpfd, "occupied", O_CREAT | O_WRONLY, 0644);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	close(fd);
+
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
+	                          0755, "/occupied", "/elsewhere");
+	TEST_ASSERT_EQUAL_INT(-1, pv_link_file(&ctx, &e));
+
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(0, fstatat(tmpfd, "occupied", &st,
+	                                 AT_SYMLINK_NOFOLLOW));
+	TEST_ASSERT_TRUE(S_ISREG(st.st_mode));
+}
+
+static void test_link_file_existing_regular_file_rootfs_mode(void)
+{
+	ctx.rootfs_mode = 1;
+
+	int fd = openat(tmpfd, "occupied", O_CREAT | O_WRONLY, 0644);
+	TEST_ASSERT_NOT_EQUAL(-1, fd);
+	close(fd);
+
+	pv_entry_t e = make_entry(PV_TYPE_LINK, test_user, test_group,
+	                          0755, "/occupied", "/elsewhere");
+	TEST_ASSERT_EQUAL_INT(0, pv_link_file(&ctx, &e));
+
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(0, fstatat(tmpfd, "occupied", &st,
+	                                 AT_SYMLINK_NOFOLLOW));
+	TEST_ASSERT_TRUE(S_ISREG(st.st_mode));
+}
+
 static void test_link_file_dry_run_new(void)
 {
 	pv_ctx_t dry_ctx = ctx;
@@ -585,6 +620,8 @@ int main(void)
 	RUN_TEST(test_link_file_correct_existing);
 	RUN_TEST(test_link_file_wrong_existing);
 	RUN_TEST(test_link_file_migrate_directory);
+	RUN_TEST(test_link_file_existing_regular_file);
+	RUN_TEST(test_link_file_existing_regular_file_rootfs_mode);
 	RUN_TEST(test_link_file_dry_run_new);
 	RUN_TEST(test_link_file_dry_run_migrate);
 	RUN_TEST(test_bind_mount_dry_run);

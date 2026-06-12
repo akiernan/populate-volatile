@@ -52,10 +52,6 @@ within each section.
   testing `errno != EEXIST` after `pv_mkdirtree` fails is
   meaningless - it already swallows EEXIST internally and errno may
   be stale from its cleanup calls.
-- **`pv_link_file` fall-through for non-dir/non-symlink targets**:
-  when NAME exists as e.g. a regular file, the code falls through
-  and lets `symlinkat` fail EEXIST. Emit a deliberate warning
-  ("exists and is not a directory or symlink") instead.
 - **Error-handling contract**: ops return -1, `apply_cb` ignores it,
   bind mount used to exit (fixed). Pick one contract and follow it
   through to the exit code (see exit-status bug above).
@@ -70,7 +66,6 @@ within each section.
 - Mounted-directory migration skip (`pv_link_file` case 3) - can sit
   in the privileged suite next to `test_bind_mount` (note: the suite
   runs unprivileged via `unshare -rm`).
-- `pv_link_file` with an existing regular file at NAME.
 
 ## Housekeeping
 

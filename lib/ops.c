@@ -501,10 +501,17 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		warn("fstatat: %s", entry->name);
 		return ctx->rootfs_mode ? 0 : -1;
 	} else {
-		/* Exists but is not a symlink or directory */
+		/*
+		 * Exists but is not a symlink or directory (e.g. a regular
+		 * file).  Refuse rather than fall through to a symlinkat()
+		 * that can only fail EEXIST.
+		 */
 		TRACE("fstatat(\"%s\") -> mode=%04o ifmt=0%o (not dir/link)",
 		      relname, (unsigned)(st.st_mode & 07777),
 		      (unsigned)((st.st_mode & S_IFMT) >> 12));
+		warnx("link_file: %s exists and is not a directory or symlink",
+		      entry->name);
+		return ctx->rootfs_mode ? 0 : -1;
 	}
 
 	/* --- Case 3 (after migration) or Case 4: create symlink --- */
