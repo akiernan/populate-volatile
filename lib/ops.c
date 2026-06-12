@@ -191,6 +191,36 @@ static int exec_cp_a(const char *src, const char *dst)
 }
 
 /*
+ * Check whether entry->name already exists; the f/d ops never modify an
+ * existing object.
+ *
+ * Returns 1 if it exists (caller skips with success), 0 if absent
+ * (caller proceeds to create), -1 on stat error.
+ */
+static int target_exists(const pv_ctx_t *ctx, const pv_entry_t *entry)
+{
+	const char *relname = entry->name + 1;
+	struct stat st;
+
+	if (fstatat(ctx->rootfd, relname, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+		TRACE("fstatat(\"%s\") -> exists (mode=%04o ifmt=0%o)",
+		      relname, (unsigned)(st.st_mode & 07777),
+		      (unsigned)((st.st_mode & S_IFMT) >> 12));
+		if (ctx->verbose)
+			printf("Target already exists, skipping: %s\n",
+			       entry->name);
+		return 1;
+	}
+	if (errno != ENOENT) {
+		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
+		warn("fstatat: %s", entry->name);
+		return -1;
+	}
+	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
+	return 0;
+}
+
+/*
  * Build the host-visible absolute path for an entry->name by concatenating
  * ctx->rootdir and the absolute path within the rootdir.
  * Writes into buf[bufsz].  Returns 0 or -1.
@@ -233,23 +263,11 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 
 	TRACE("name=\"%s\" ltarget=\"%s\"", entry->name, entry->ltarget);
 
-	/* Check whether target already exists */
-	struct stat st;
-	if (fstatat(ctx->rootfd, relname, &st, AT_SYMLINK_NOFOLLOW) == 0) {
-		TRACE("fstatat(\"%s\") -> exists (mode=%04o type=0%o)",
-		      relname, (unsigned)(st.st_mode & 07777),
-		      (unsigned)(st.st_mode & S_IFMT) >> 12);
-		if (ctx->verbose)
-			printf("Target already exists, skipping: %s\n",
-			       entry->name);
+	int exists = target_exists(ctx, entry);
+	if (exists == 1)
 		return 0;
-	}
-	if (errno != ENOENT) {
-		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
-		warn("fstatat: %s", entry->name);
+	if (exists == -1)
 		return op_fail(ctx);
-	}
-	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
 
 	if (ctx->dry_run) {
 		if (entry->ltarget[0] != '\0')
@@ -334,23 +352,11 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 
 	TRACE("name=\"%s\" mode=%04o", entry->name, (unsigned)entry->mode);
 
-	/* Check whether target already exists */
-	struct stat st;
-	if (fstatat(ctx->rootfd, relname, &st, AT_SYMLINK_NOFOLLOW) == 0) {
-		TRACE("fstatat(\"%s\") -> exists (mode=%04o ifmt=0%o)",
-		      relname, (unsigned)(st.st_mode & 07777),
-		      (unsigned)((st.st_mode & S_IFMT) >> 12));
-		if (ctx->verbose)
-			printf("Target already exists, skipping: %s\n",
-			       entry->name);
+	int exists = target_exists(ctx, entry);
+	if (exists == 1)
 		return 0;
-	}
-	if (errno != ENOENT) {
-		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
-		warn("fstatat: %s", entry->name);
+	if (exists == -1)
 		return op_fail(ctx);
-	}
-	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
 
 	if (ctx->dry_run) {
 		printf("[dry-run] mkdir -p %s  (mode=%04o, owner=%s:%s)\n",
