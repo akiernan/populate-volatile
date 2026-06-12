@@ -1,33 +1,33 @@
 # Outstanding review findings
 
-From a code review on 2026-06-12. Already fixed in separate commits:
-dead `DT_UNKNOWN` fallback in `discover_cfgfiles`, missing `ERANGE`
-retry / duplicated pw-gr lookup code, bind-mount idempotency and
-fatality. Everything below is still open, roughly in priority order
-within each section.
-
-## Bugs
-
-(none outstanding)
-
-## Security hardening
-
-(none outstanding)
-
-## Cleanups / redundant abstractions
-
+From a code review on 2026-06-12. All bugs, security hardening items
+and cleanups identified in that review have been fixed in individual
+commits (see the git history from "main: Fix dead DT_UNKNOWN fallback
+in discover_cfgfiles" onwards). What remains is below.
 
 ## Test gaps
 
 - `discover_cfgfiles` `DT_UNKNOWN` fallback - the regular-file
-  filter is now integration-tested, but the stat fallback cannot be
+  filter is integration-tested, but the stat fallback cannot be
   exercised on tmpfs/ext4; would need extraction from main.c for a
   unit test.
+- The runtime statx detection ladder in `pv_is_mounted`
+  (ENOSYS/EINVAL/EPERM, clear `stx_attributes_mask` bit) cannot be
+  exercised on a modern kernel; the mountinfo fallback itself is
+  covered directly via `pv_is_mounted_mountinfo`.
 
-## Housekeeping
+## Verification
 
-- Untracked `Unity/` directory at the repo root: full upstream Unity
-  checkout left over from the 2.6.1 vendoring; the vendored copy is
-  the three files in `tests/unity/`. Delete or gitignore before it
-  is committed by accident (it also includes files beyond what the
-  licensing note covers).
+- Run `./docker-build.sh all` (glibc, musl, clang) before release;
+  the development sandbox only covers glibc.  Of note for musl:
+  whether its headers provide `STATX_ATTR_MOUNT_ROOT` decides if the
+  statx mountpoint check is compiled in or the build is
+  fallback-only (both are correct).
+
+## Downstream notes for the next release
+
+- populate-volatile now exits 1 at runtime when entries fail
+  (rootfs mode still always exits 0); sysvinit integrations will see
+  the new status.
+- cp(1) is no longer found via PATH; packagers whose target layout
+  lacks /bin/cp should pass `-Dcp_path=` (see meson_options.txt).
