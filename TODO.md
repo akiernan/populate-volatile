@@ -33,10 +33,6 @@ within each section.
   "fstatat exists -> skip" preamble duplicated between
   `pv_create_file` and `pv_mkdir`; the
   `ltarget[0]=='/' ? +1 : ltarget` strip appears twice.
-- **Stale errno check** (`lib/ops.c`, `pv_link_file` parent mkdir):
-  testing `errno != EEXIST` after `pv_mkdirtree` fails is
-  meaningless - it already swallows EEXIST internally and errno may
-  be stale from its cleanup calls.
 
 ## Test gaps
 

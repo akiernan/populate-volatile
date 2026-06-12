@@ -540,8 +540,7 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	if (slash != NULL && slash != parent) {
 		*slash = '\0';
 		TRACE("ensuring parent dir \"%s\"", parent);
-		if (pv_mkdirtree(ctx->rootfd, parent, 0755) == -1 &&
-		    errno != EEXIST) {
+		if (pv_mkdirtree(ctx->rootfd, parent, 0755) == -1) {
 			TRACE("pv_mkdirtree parent \"%s\" failed: %s",
 			      parent, strerror(errno));
 			if (!ctx->rootfs_mode)
