@@ -62,11 +62,6 @@ within each section.
 
 ## Test gaps
 
-- `pv_resolve_path` relative-symlink branch - the trickiest code in
-  the function, no test (absolute/chained/missing/final-component
-  are covered).
-- Symlink-loop termination (`PV_MAX_SYMLINKS`) - two mutually
-  pointing links.
 - `..` traversal behaviour in `pv_resolve_path`/`pv_readlink_abs` -
   pin down whatever the hardening above decides.
 - rootfs-mode error suppression paths, including the uid=0/gid=0

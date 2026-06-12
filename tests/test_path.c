@@ -270,6 +270,61 @@ static void test_resolve_path_chained_absolute_symlinks(void)
 	TEST_ASSERT_EQUAL_STRING("/var/volatile/run/foo", buf);
 }
 
+static void test_resolve_path_relative_intermediate_symlink(void)
+{
+	/*
+	 * var/log -> volatile/log (relative target, as shipped in OE images).
+	 * /var/log/wtmp must resolve to /var/volatile/log/wtmp by prepending
+	 * the already-resolved prefix, staying within the rootfd tree.
+	 */
+	pv_mkdirtree(tmpfd, "var/volatile/log", 0755);
+	symlinkat("volatile/log", tmpfd, "var/log");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/log/wtmp", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/var/volatile/log/wtmp", buf);
+}
+
+static void test_resolve_path_relative_then_absolute_symlink(void)
+{
+	/*
+	 * var/run -> volatile/run (relative), volatile -> /data (absolute).
+	 * Exercises a relative hop followed by an absolute restart.
+	 */
+	pv_mkdirtree(tmpfd, "data/run", 0755);
+	pv_mkdirtree(tmpfd, "var", 0755);
+	symlinkat("/data", tmpfd, "var/volatile");
+	symlinkat("volatile/run", tmpfd, "var/run");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/var/run/foo", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_STRING("/data/run/foo", buf);
+}
+
+static void test_resolve_path_symlink_loop(void)
+{
+	/* a -> /b and b -> /a: must terminate with an error, not spin */
+	symlinkat("/b", tmpfd, "a");
+	symlinkat("/a", tmpfd, "b");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/a/file", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(-1, r);
+}
+
+static void test_resolve_path_relative_symlink_loop(void)
+{
+	/* Mutually-referencing relative symlinks must also terminate */
+	symlinkat("d", tmpfd, "c");
+	symlinkat("c", tmpfd, "d");
+
+	char buf[256];
+	int r = pv_resolve_path(tmpfd, "/c/file", buf, sizeof(buf));
+	TEST_ASSERT_EQUAL_INT(-1, r);
+}
+
 static void test_resolve_path_nonexistent_intermediate(void)
 {
 	/*
@@ -368,6 +423,10 @@ int main(void)
 	RUN_TEST(test_resolve_path_absolute_intermediate_symlink);
 	RUN_TEST(test_resolve_path_final_component_not_resolved);
 	RUN_TEST(test_resolve_path_chained_absolute_symlinks);
+	RUN_TEST(test_resolve_path_relative_intermediate_symlink);
+	RUN_TEST(test_resolve_path_relative_then_absolute_symlink);
+	RUN_TEST(test_resolve_path_symlink_loop);
+	RUN_TEST(test_resolve_path_relative_symlink_loop);
 	RUN_TEST(test_resolve_path_nonexistent_intermediate);
 	RUN_TEST(test_unescape_space);
 	RUN_TEST(test_unescape_no_escapes);
