@@ -129,6 +129,28 @@ static void test_parse_line_mode_octal(void)
 	TEST_ASSERT_EQUAL_UINT(0750, e.mode);
 }
 
+static void test_parse_line_mode_sticky(void)
+{
+	/* Four-digit modes as used by the oe-core volatiles config */
+	pv_entry_t e;
+	pv_parse_line("d root root 1777 /var/volatile/tmp none", &e);
+	TEST_ASSERT_EQUAL_UINT(01777, e.mode);
+}
+
+static void test_parse_line_tab_separated(void)
+{
+	/* The config format promises "separated by whitespace", not spaces */
+	pv_entry_t e;
+	int r = pv_parse_line("d\troot\troot\t0755\t/var/cache\tnone", &e);
+	TEST_ASSERT_EQUAL_INT(0, r);
+	TEST_ASSERT_EQUAL_INT(PV_TYPE_DIR, e.type);
+	TEST_ASSERT_EQUAL_STRING("root", e.user);
+	TEST_ASSERT_EQUAL_STRING("root", e.group);
+	TEST_ASSERT_EQUAL_UINT(0755, e.mode);
+	TEST_ASSERT_EQUAL_STRING("/var/cache", e.name);
+	TEST_ASSERT_EQUAL_STRING("", e.ltarget);
+}
+
 static void test_parse_line_invalid_mode(void)
 {
 	pv_entry_t e;
@@ -275,6 +297,8 @@ int main(void)
 	RUN_TEST(test_parse_line_unknown_type);
 	RUN_TEST(test_parse_line_too_few_fields);
 	RUN_TEST(test_parse_line_mode_octal);
+	RUN_TEST(test_parse_line_mode_sticky);
+	RUN_TEST(test_parse_line_tab_separated);
 	RUN_TEST(test_parse_line_invalid_mode);
 	RUN_TEST(test_parse_config_multiline);
 	RUN_TEST(test_parse_config_missing_file);
