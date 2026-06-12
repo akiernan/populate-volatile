@@ -147,17 +147,16 @@ static int discover_cfgfiles(int cfgfd, char ***names_out)
 			continue; /* skip . .. and hidden files */
 
 		/* Only process regular files */
-		if (ent->d_type != DT_REG && ent->d_type != DT_UNKNOWN) {
-			if (ent->d_type == DT_UNKNOWN) {
-				struct stat st;
-				if (fstatat(cfgfd, ent->d_name, &st,
-				            AT_SYMLINK_NOFOLLOW) == -1)
-					continue;
-				if (!S_ISREG(st.st_mode))
-					continue;
-			} else {
+		if (ent->d_type == DT_UNKNOWN) {
+			/* Filesystem doesn't provide d_type; use fstatat */
+			struct stat st;
+			if (fstatat(cfgfd, ent->d_name, &st,
+			            AT_SYMLINK_NOFOLLOW) == -1)
 				continue;
-			}
+			if (!S_ISREG(st.st_mode))
+				continue;
+		} else if (ent->d_type != DT_REG) {
+			continue;
 		}
 
 		if (count >= cap) {
