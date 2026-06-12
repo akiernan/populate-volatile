@@ -49,6 +49,16 @@ static int op_fail(const pv_ctx_t *ctx)
 }
 
 /*
+ * Map a config path to one relative to ctx->rootfd.  Unlike entry->name,
+ * which is validated absolute in pv_apply_entry, ltarget may be either
+ * form, so the leading '/' is stripped only when present.
+ */
+static const char *relpath(const char *path)
+{
+	return path[0] == '/' ? path + 1 : path;
+}
+
+/*
  * Resolve username -> uid and groupname -> gid via pv_resolve_user /
  * pv_resolve_group (see pv/validate.h for the runtime vs rootfs build-time
  * environment rationale).
@@ -293,9 +303,7 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 
 	if (entry->ltarget[0] != '\0') {
 		/* Copy from source */
-		const char *relsrc = entry->ltarget[0] == '/'
-		                     ? entry->ltarget + 1
-		                     : entry->ltarget;
+		const char *relsrc = relpath(entry->ltarget);
 		TRACE("opening source \"%s\"", relsrc);
 		int srcfd = openat(ctx->rootfd, relsrc, O_RDONLY);
 		if (srcfd == -1) {
@@ -493,9 +501,7 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		 * likely empty anyway - and fall through to create the
 		 * symlink, which is the critical step.
 		 */
-		const char *reltgt = entry->ltarget[0] == '/'
-		                     ? entry->ltarget + 1
-		                     : entry->ltarget;
+		const char *reltgt = relpath(entry->ltarget);
 		TRACE("pv_mkdirtree(\"%s\")", reltgt);
 		if (pv_mkdirtree(ctx->rootfd, reltgt, 0755) == 0) {
 			TRACE("pv_mkdirtree ok -> exec_cp_a");

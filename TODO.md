@@ -20,8 +20,6 @@ within each section.
 
 ## Cleanups / redundant abstractions
 
-- **Repeated idioms in `lib/ops.c`**: the
-  `ltarget[0]=='/' ? +1 : ltarget` strip appears twice.
 
 ## Test gaps
 
