@@ -40,6 +40,3 @@ within each section.
   the three files in `tests/unity/`. Delete or gitignore before it
   is committed by accident (it also includes files beyond what the
   licensing note covers).
-- Pre-existing `-Wformat-truncation` warnings in `tests/test_ops.c`
-  and `tests/test_bind_mount.c` (snprintf of `tmpbase` + suffix into
-  `PATH_MAX`).

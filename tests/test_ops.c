@@ -492,7 +492,7 @@ static void test_bind_mount_dry_run(void)
 	TEST_ASSERT_EQUAL_INT(0, r);
 
 	/* Must not have been mounted */
-	char dst[PATH_MAX];
+	char dst[PATH_MAX + 16];
 	snprintf(dst, sizeof(dst), "%s/bmdst", tmpbase);
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst));
 }
@@ -508,7 +508,7 @@ static void test_bind_mount_rootfs_mode(void)
 	int r = pv_bind_mount(&rfs_ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
 
-	char dst[PATH_MAX];
+	char dst[PATH_MAX + 16];
 	snprintf(dst, sizeof(dst), "%s/rfdst", tmpbase);
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst));
 }
@@ -568,7 +568,7 @@ static void test_apply_entry_dispatches_bind_dry_run(void)
 	int r = pv_apply_entry(&dry_ctx, &e);
 	TEST_ASSERT_EQUAL_INT(0, r);
 
-	char dst[PATH_MAX];
+	char dst[PATH_MAX + 16];
 	snprintf(dst, sizeof(dst), "%s/addst", tmpbase);
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst));
 }

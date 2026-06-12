@@ -33,7 +33,8 @@
 #define EXIT_SKIP 77
 
 static char    tmpbase[PATH_MAX];
-static char    dst_full[PATH_MAX]; /* absolute path of dst dir for pv_is_mounted */
+/* tmpbase plus a short suffix: headroom keeps -Wformat-truncation happy */
+static char    dst_full[PATH_MAX + 16];
 static int     rootfd = -1;
 static pv_ctx_t ctx;
 
