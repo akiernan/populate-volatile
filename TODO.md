@@ -63,9 +63,6 @@ within each section.
 - `discover_cfgfiles` - no unit test (the dead-code bug would have
   been caught); only indirectly covered by the ordering integration
   test.
-- Mounted-directory migration skip (`pv_link_file` case 3) - can sit
-  in the privileged suite next to `test_bind_mount` (note: the suite
-  runs unprivileged via `unshare -rm`).
 
 ## Housekeeping
 

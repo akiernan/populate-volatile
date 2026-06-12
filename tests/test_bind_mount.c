@@ -124,6 +124,32 @@ static void test_bind_mount_idempotent(void)
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst_full));
 }
 
+static void test_link_file_skips_mounted_dir(void)
+{
+	pv_entry_t e;
+
+	/* Make dst a mountpoint... */
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_BIND;
+	strcpy(e.name,    "/dst");
+	strcpy(e.ltarget, "/src");
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/* ...then ask for it to be migrated to a symlink */
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_LINK;
+	strcpy(e.name,    "/dst");
+	strcpy(e.ltarget, "/elsewhere");
+	TEST_ASSERT_EQUAL_INT(0, pv_link_file(&ctx, &e));
+
+	/* Still a directory and still mounted - not rmtree'd */
+	struct stat st;
+	TEST_ASSERT_EQUAL_INT(0, fstatat(rootfd, "dst", &st,
+	                                 AT_SYMLINK_NOFOLLOW));
+	TEST_ASSERT_TRUE(S_ISDIR(st.st_mode));
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted(dst_full));
+}
+
 static void test_apply_entry_dispatches_bind(void)
 {
 	pv_entry_t e;
@@ -175,6 +201,7 @@ int main(void)
 	UNITY_BEGIN();
 	RUN_TEST(test_bind_mount_creates_mount);
 	RUN_TEST(test_bind_mount_idempotent);
+	RUN_TEST(test_link_file_skips_mounted_dir);
 	RUN_TEST(test_apply_entry_dispatches_bind);
 	return UNITY_END();
 }
