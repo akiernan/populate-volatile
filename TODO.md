@@ -25,16 +25,6 @@ within each section.
   the staging directory and writes to the **host** during do_rootfs.
   Mitigate: reject `..` after resolution, or use
   `openat2(RESOLVE_BENEATH)` with a lexical fallback.
-- **TOCTOU between creation and `apply_meta`** (`lib/ops.c`):
-  files/dirs are created, the fd closed, then chown/chmod happen by
-  path; `fchmodat(..., 0)` follows symlinks (Linux lacks
-  `AT_SYMLINK_NOFOLLOW` support for it). Fix is cheap:
-  `pv_create_file` already holds the open fd, and `pv_mkdirtree_fd`
-  exists precisely to return a leaf fd - apply metadata with
-  `fchown`/`fchmod` on those instead. This would also give
-  `pv_mkdirtree_fd` its only real user (currently only the
-  fd-closing wrapper is used; otherwise make the `_fd` variant
-  static).
 - **`exec_cp_a` uses `execlp`** (`lib/ops.c`): PATH lookup in a
   root-at-boot process. Use an absolute `/bin/cp` or a fixed PATH.
 - **`pv_is_mounted` compares literal strings** (`lib/path.c`):

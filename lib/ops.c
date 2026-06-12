@@ -98,24 +98,28 @@ static int copy_fd(int srcfd, int dstfd)
 }
 
 /*
- * Apply ownership and permissions to relpath (relative to ctx->rootfd).
+ * Apply ownership and permissions through the open fd of the object we
+ * just created.  Operating on the fd rather than the path means a
+ * concurrent rename/symlink swap cannot redirect the chown/chmod
+ * (fchmodat has no working AT_SYMLINK_NOFOLLOW on Linux).
+ * path is used for messages only.
  * Errors are warned; in rootfs_mode they are non-fatal (return 0).
  */
-static int apply_meta(const pv_ctx_t *ctx, const char *relpath,
-                      uid_t uid, gid_t gid, mode_t mode)
+static int apply_meta_fd(const pv_ctx_t *ctx, int fd, const char *path,
+                         uid_t uid, gid_t gid, mode_t mode)
 {
 	int r = 0;
 
-	TRACE("relpath=\"%s\" uid=%u gid=%u mode=%04o",
-	      relpath, (unsigned)uid, (unsigned)gid, (unsigned)mode);
+	TRACE("path=\"%s\" fd=%d uid=%u gid=%u mode=%04o",
+	      path, fd, (unsigned)uid, (unsigned)gid, (unsigned)mode);
 
-	if (fchownat(ctx->rootfd, relpath, uid, gid, AT_SYMLINK_NOFOLLOW) == -1) {
-		warn("chown %u:%u %s", (unsigned)uid, (unsigned)gid, relpath);
+	if (fchown(fd, uid, gid) == -1) {
+		warn("chown %u:%u %s", (unsigned)uid, (unsigned)gid, path);
 		if (!ctx->rootfs_mode)
 			r = -1;
 	}
-	if (fchmodat(ctx->rootfd, relpath, mode, 0) == -1) {
-		warn("chmod %04o %s", (unsigned)mode, relpath);
+	if (fchmod(fd, mode) == -1) {
+		warn("chmod %04o %s", (unsigned)mode, path);
 		if (!ctx->rootfs_mode)
 			r = -1;
 	}
@@ -281,7 +285,6 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			return ctx->rootfs_mode ? 0 : -1;
 		}
 		close(srcfd);
-		close(fd);
 		TRACE("copied \"%s\" -> \"%s\"", relsrc, relname);
 	} else {
 		/* Touch: create empty file */
@@ -293,14 +296,16 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			warn("touch: %s", entry->name);
 			return ctx->rootfs_mode ? 0 : -1;
 		}
-		close(fd);
 		TRACE("touched \"%s\"", relname);
 	}
 
 	if (ctx->verbose)
 		printf("Created file: %s\n", entry->name);
 
-	return apply_meta(ctx, relname, uid, gid, entry->mode);
+	/* Apply metadata via the still-open fd, then close it */
+	int r = apply_meta_fd(ctx, fd, entry->name, uid, gid, entry->mode);
+	close(fd);
+	return r;
 }
 
 int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
@@ -341,19 +346,23 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			return -1;
 	}
 
-	if (pv_mkdirtree(ctx->rootfd, relname, entry->mode) == -1) {
-		TRACE("pv_mkdirtree(\"%s\") failed", relname);
+	int fd = pv_mkdirtree_fd(ctx->rootfd, relname, entry->mode);
+	if (fd == -1) {
+		TRACE("pv_mkdirtree_fd(\"%s\") failed", relname);
 		warn("mkdirtree: %s", entry->name);
 		if (!ctx->rootfs_mode)
 			return -1;
 		return 0;
 	}
-	TRACE("pv_mkdirtree(\"%s\") -> ok", relname);
+	TRACE("pv_mkdirtree_fd(\"%s\") -> fd=%d", relname, fd);
 
 	if (ctx->verbose)
 		printf("Created directory: %s\n", entry->name);
 
-	return apply_meta(ctx, relname, uid, gid, entry->mode);
+	/* Apply metadata via the leaf fd, then close it */
+	int r = apply_meta_fd(ctx, fd, entry->name, uid, gid, entry->mode);
+	close(fd);
+	return r;
 }
 
 int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
