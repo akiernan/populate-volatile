@@ -559,14 +559,31 @@ int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		return 0;
 	}
 
+	/*
+	 * Idempotency: if the destination is already a mountpoint, a previous
+	 * run (or the admin) has mounted it; mounting again would stack an
+	 * identical mount on top.  On a mountinfo read error (-1) fall through
+	 * and attempt the mount.
+	 */
+	int mounted = pv_is_mounted(fulldst);
+	TRACE("pv_is_mounted(\"%s\") -> %d", fulldst, mounted);
+	if (mounted == 1) {
+		if (ctx->verbose)
+			printf("Already mounted, skipping: %s\n", fulldst);
+		return 0;
+	}
+
 	if (ctx->dry_run) {
 		printf("[dry-run] mount --bind %s %s\n", fullsrc, fulldst);
 		return 0;
 	}
 
 	TRACE("mount --bind \"%s\" \"%s\"", fullsrc, fulldst);
-	if (mount(fullsrc, fulldst, NULL, MS_BIND, NULL) == -1)
-		err(EXIT_FAILURE, "mount --bind %s %s", fullsrc, fulldst);
+	if (mount(fullsrc, fulldst, NULL, MS_BIND, NULL) == -1) {
+		TRACE("mount failed: %s", strerror(errno));
+		warn("mount --bind %s %s", fullsrc, fulldst);
+		return -1;
+	}
 
 	TRACE("mount ok");
 	if (ctx->verbose)

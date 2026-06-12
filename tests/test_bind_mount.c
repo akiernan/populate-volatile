@@ -105,6 +105,25 @@ static void test_bind_mount_creates_mount(void)
 	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted(dst_full));
 }
 
+static void test_bind_mount_idempotent(void)
+{
+	pv_entry_t e;
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_BIND;
+	strcpy(e.name,    "/dst");
+	strcpy(e.ltarget, "/src");
+
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/*
+	 * If the second call stacked another mount, one umount would leave
+	 * the destination still mounted.
+	 */
+	TEST_ASSERT_EQUAL_INT(0, umount2(dst_full, MNT_DETACH));
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst_full));
+}
+
 static void test_apply_entry_dispatches_bind(void)
 {
 	pv_entry_t e;
@@ -155,6 +174,7 @@ int main(void)
 
 	UNITY_BEGIN();
 	RUN_TEST(test_bind_mount_creates_mount);
+	RUN_TEST(test_bind_mount_idempotent);
 	RUN_TEST(test_apply_entry_dispatches_bind);
 	return UNITY_END();
 }

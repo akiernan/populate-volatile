@@ -53,7 +53,9 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry);
 
 /*
  * Bind-mount entry->ltarget onto entry->name via mount(MS_BIND).
- * Calls err() on failure - assumes caller has CAP_SYS_ADMIN.
+ * Requires CAP_SYS_ADMIN.  Skips (returns 0) if the destination is
+ * already a mountpoint, so repeated runs do not stack mounts.
+ * Returns -1 on failure.
  */
 int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry);
 
