@@ -35,14 +35,6 @@ within each section.
 
 ## Cleanups / redundant abstractions
 
-- **`entry_list_t` is unnecessary** (`src/main.c`):
-  `process_cfgfile` collects every entry into a growable array only
-  to check + apply them one at a time - a streaming callback does
-  the same with less code. Would delete `entry_list_t`,
-  `entry_list_push`, `entry_list_free`, `collect_cb`, and the array
-  form of `pv_check_requirements` (only ever called with
-  `nentries == 1`). Each `pv_entry_t` is ~8.5 KB, so the array is
-  also needlessly heavy.
 - **Repeated idioms in `lib/ops.c`**: the
   `ctx->rootfs_mode ? 0 : -1` pattern (~8 sites); the
   "fstatat exists -> skip" preamble duplicated between

@@ -52,51 +52,33 @@ static const char *strip_trailing_slashes(const char *s)
 }
 
 /* -------------------------------------------------------------------------
- * Entry list: a growable array of pv_entry_t for batch requirement checking.
+ * Entry application
  * ---------------------------------------------------------------------- */
 
+/* Per-config-file state threaded through apply_cb */
 typedef struct {
-	pv_entry_t *data;
-	size_t      len;
-	size_t      cap;
-} entry_list_t;
+	const pv_ctx_t *ctx;
+	const char     *cfgname;
+	int             check_reqs;
+} apply_state_t;
 
-static int entry_list_push(entry_list_t *list, const pv_entry_t *e)
-{
-	if (list->len >= list->cap) {
-		size_t newcap = list->cap == 0 ? 64 : list->cap * 2;
-		pv_entry_t *newdata = realloc(list->data,
-		                              newcap * sizeof(pv_entry_t));
-		if (newdata == NULL) {
-			warn("realloc");
-			return -1;
-		}
-		list->data = newdata;
-		list->cap  = newcap;
-	}
-	list->data[list->len++] = *e;
-	return 0;
-}
-
-static void entry_list_free(entry_list_t *list)
-{
-	free(list->data);
-	list->data = NULL;
-	list->len  = 0;
-	list->cap  = 0;
-}
-
-/* pv_parse_config callback that appends entries to an entry_list_t */
-static int collect_cb(const pv_entry_t *entry, void *userdata)
-{
-	return entry_list_push((entry_list_t *)userdata, entry);
-}
-
-/* pv_parse_config callback that applies entries immediately via pv_apply_entry */
+/*
+ * pv_parse_config callback: check the entry's own user/group requirements
+ * (unless disabled for 00_core) and apply it.  Individual bad entries are
+ * skipped rather than failing the whole file, matching the shell script.
+ */
 static int apply_cb(const pv_entry_t *entry, void *userdata)
 {
-	/* userdata is pv_ctx_t * - errors are non-fatal here; keep going */
-	pv_apply_entry((pv_ctx_t *)userdata, entry);
+	apply_state_t *st = userdata;
+
+	if (st->check_reqs && pv_check_requirements(entry, 1) != 0) {
+		warnx("Skipping %s %s (undefined user/group)",
+		      st->cfgname, entry->name);
+		return 0;
+	}
+
+	/* Errors are non-fatal here; keep going */
+	pv_apply_entry(st->ctx, entry);
 	return 0;
 }
 
@@ -199,39 +181,23 @@ static int discover_cfgfiles(int cfgfd, char ***names_out)
  * ---------------------------------------------------------------------- */
 
 /*
- * Apply a single config file.
+ * Apply a single config file, streaming entries through apply_cb.
  *   skip_reqs = 1 -> skip requirement checking (used for 00_core).
- * Returns 0 on success, 1 if requirements check fails (file skipped).
+ * Returns 0; parse/apply errors are warned and processing continues.
  */
 static int process_cfgfile(const pv_ctx_t *ctx, int cfgfd,
                             const char *name, int skip_reqs)
 {
+	apply_state_t st = {
+		.ctx        = ctx,
+		.cfgname    = name,
+		.check_reqs = !skip_reqs,
+	};
+
 	if (ctx->verbose)
 		printf("Applying %s\n", name);
 
-	if (!skip_reqs) {
-		/* Collect all entries, then apply each one individually
-		 * after checking its own user/group requirements.
-		 * This matches the shell script's behaviour of skipping
-		 * individual bad entries rather than the whole file. */
-		entry_list_t list = {NULL, 0, 0};
-
-		if (pv_parse_config(cfgfd, name, collect_cb, &list) == -1) {
-			entry_list_free(&list);
-			return 0; /* I/O error already warned */
-		}
-		for (size_t i = 0; i < list.len; i++) {
-			if (pv_check_requirements(&list.data[i], 1) != 0) {
-				warnx("Skipping %s %s (undefined user/group)",
-				      name, list.data[i].name);
-				continue;
-			}
-			pv_apply_entry(ctx, &list.data[i]);
-		}
-		entry_list_free(&list);
-	} else {
-		pv_parse_config(cfgfd, name, apply_cb, (void *)ctx);
-	}
+	pv_parse_config(cfgfd, name, apply_cb, &st);
 	return 0;
 }
 
