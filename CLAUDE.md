@@ -60,7 +60,7 @@ All ops receive a `pv_ctx_t` (rootfd, rootdir, verbose, dry_run, rootfs_mode).
 
 ### Tests
 
-Unity 2.5.2 is vendored in `tests/unity/` under the MIT license (see `tests/unity/unity.h`). The four test executables (`test_config`, `test_path`, `test_validate`, `test_ops`) are built and registered with `meson test`. Bind-mount tests require `CAP_SYS_ADMIN` and are outside the Unity suite.
+Unity 2.6.1 is vendored in `tests/unity/` under the MIT license (see `tests/unity/unity.h`). Five test executables (`test_config`, `test_path`, `test_validate`, `test_ops`, `test_bind_mount`) are built and registered with `meson test`. The bind-mount tests require `CAP_SYS_ADMIN` and exit 77 (meson SKIP) without it; they can be run unprivileged via `unshare -rm build/test_bind_mount`.
 
 ## Licensing
 
