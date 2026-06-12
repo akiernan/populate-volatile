@@ -650,9 +650,20 @@ int pv_is_mounted_mountinfo(const char *path)
  *
  * Returns 1 if path is a mountpoint, 0 if not, -1 on error.
  */
+/*
+ * STATX_ATTR_MOUNT_ROOT is fixed kernel ABI (added in 5.8); supply it
+ * when the libc headers provide statx() but predate the constant
+ * (e.g. musl, which defines struct statx but no STATX_ATTR_* flags).
+ */
+#ifdef HAVE_STATX
+#ifndef STATX_ATTR_MOUNT_ROOT
+#define STATX_ATTR_MOUNT_ROOT 0x00002000U
+#endif
+#endif
+
 int pv_is_mounted(const char *path)
 {
-#ifdef HAVE_STATX_MOUNT_ROOT
+#ifdef HAVE_STATX
 	static int statx_usable = 1;
 
 	if (statx_usable) {

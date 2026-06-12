@@ -44,15 +44,18 @@ extra_warnings = cc.get_supported_arguments([
 common_args = posix_args + extra_warnings
 
 # statx(STATX_ATTR_MOUNT_ROOT) is the preferred mountpoint check; it needs
-# both the libc wrapper and the attribute constant at build time.  Runtime
-# support (kernel >= 5.8) is probed separately in pv_is_mounted(), which
-# falls back to parsing /proc/self/mountinfo.
-have_statx = cc.has_function('statx',
+# the libc wrapper and struct at build time (glibc 2.28+, musl 1.2.5+).
+# STATX_ATTR_MOUNT_ROOT itself is fixed kernel ABI, so path.c supplies the
+# constant when the libc headers predate it (musl defines the struct but
+# not the STATX_ATTR_* flags).  Runtime support (kernel >= 5.8) is probed
+# separately in pv_is_mounted(), which falls back to parsing
+# /proc/self/mountinfo.
+have_statx_func = cc.has_function('statx',
   prefix : '#define _GNU_SOURCE\n#include <sys/stat.h>')
-have_statx_mount_root = cc.has_header_symbol('sys/stat.h',
-  'STATX_ATTR_MOUNT_ROOT', prefix : '#define _GNU_SOURCE')
-if have_statx and have_statx_mount_root
-  common_args += '-DHAVE_STATX_MOUNT_ROOT'
+have_statx_type = cc.has_type('struct statx',
+  prefix : '#define _GNU_SOURCE\n#include <sys/stat.h>')
+if have_statx_func and have_statx_type
+  common_args += '-DHAVE_STATX'
 endif
 
 # --------------------------------------------------------------------------
