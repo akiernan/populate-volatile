@@ -6,13 +6,29 @@
 #include "pv/config.h"
 
 /*
- * Check whether username exists using getpwnam_r().
+ * Resolve username to a uid using getpwnam_r(), retrying with a larger
+ * buffer on ERANGE.  When found and uid is non-NULL, *uid is written.
  *
  * At runtime the calling process IS the target environment so this is
  * trivially correct.  At rootfs build time the process runs under pseudo
  * (https://git.yoctoproject.org/pseudo) which sets PSEUDO_PASSWD to point
  * at the target rootfs's passwd database, so getpwnam_r() resolves against
  * the target image rather than the host.
+ *
+ * Returns 1 if found, 0 if not found, -1 on error.
+ */
+int pv_resolve_user(const char *user, uid_t *uid);
+
+/*
+ * As pv_resolve_user() but for groups via getgrnam_r().
+ *
+ * Returns 1 if found, 0 if not found, -1 on error.
+ */
+int pv_resolve_group(const char *group, gid_t *gid);
+
+/*
+ * Check whether username exists.  Equivalent to
+ * pv_resolve_user(user, NULL); same environment rationale.
  *
  * Returns 1 if found, 0 if not found, -1 on error.
  */

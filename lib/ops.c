@@ -24,8 +24,6 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <grp.h>
-#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,65 +32,33 @@
 #include "pv/config.h"
 #include "pv/ops.h"
 #include "pv/path.h"
+#include "pv/validate.h"
 
 /* -------------------------------------------------------------------------
  * Internal helpers
  * ---------------------------------------------------------------------- */
 
 /*
- * Resolve username -> uid and groupname -> gid via getpwnam_r / getgrnam_r.
- *
- * At runtime the process IS the target environment so this is correct
- * directly.  At rootfs build time pseudo sets PSEUDO_PASSWD so that
- * getpwnam_r resolves against the target image rather than the host.
+ * Resolve username -> uid and groupname -> gid via pv_resolve_user /
+ * pv_resolve_group (see pv/validate.h for the runtime vs rootfs build-time
+ * environment rationale).
  */
 static int resolve_ids(const char *user, const char *group,
                        uid_t *uid, gid_t *gid)
 {
-	static long pw_bufsz;
-	static long gr_bufsz;
-	struct passwd pwd, *pwdp;
-	struct group  grp, *grpp;
-	char *buf;
 	int r;
 
-	if (pw_bufsz == 0) {
-		pw_bufsz = sysconf(_SC_GETPW_R_SIZE_MAX);
-		if (pw_bufsz <= 0)
-			pw_bufsz = 4096;
-	}
-	buf = malloc((size_t)pw_bufsz);
-	if (buf == NULL) {
-		warn("malloc");
-		return -1;
-	}
-	r = getpwnam_r(user, &pwd, buf, (size_t)pw_bufsz, &pwdp);
-	free(buf);
-	if (r != 0 || pwdp == NULL) {
+	r = pv_resolve_user(user, uid);
+	if (r == 0)
 		warnx("unknown user '%s'", user);
+	if (r != 1)
 		return -1;
-	}
-	*uid = pwdp->pw_uid;
-	TRACE("user \"%s\" -> uid=%u", user, (unsigned)*uid);
 
-	if (gr_bufsz == 0) {
-		gr_bufsz = sysconf(_SC_GETGR_R_SIZE_MAX);
-		if (gr_bufsz <= 0)
-			gr_bufsz = 4096;
-	}
-	buf = malloc((size_t)gr_bufsz);
-	if (buf == NULL) {
-		warn("malloc");
-		return -1;
-	}
-	r = getgrnam_r(group, &grp, buf, (size_t)gr_bufsz, &grpp);
-	free(buf);
-	if (r != 0 || grpp == NULL) {
+	r = pv_resolve_group(group, gid);
+	if (r == 0)
 		warnx("unknown group '%s'", group);
+	if (r != 1)
 		return -1;
-	}
-	*gid = grpp->gr_gid;
-	TRACE("group \"%s\" -> gid=%u", group, (unsigned)*gid);
 
 	return 0;
 }
