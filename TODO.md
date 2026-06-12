@@ -20,8 +20,6 @@ within each section.
   the staging directory and writes to the **host** during do_rootfs.
   Mitigate: reject `..` after resolution, or use
   `openat2(RESOLVE_BENEATH)` with a lexical fallback.
-- **`exec_cp_a` uses `execlp`** (`lib/ops.c`): PATH lookup in a
-  root-at-boot process. Use an absolute `/bin/cp` or a fixed PATH.
 - **`pv_is_mounted` compares literal strings** (`lib/path.c`):
   mountinfo records the canonical mount point, so a path reaching
   the mountpoint through a symlinked component yields a false

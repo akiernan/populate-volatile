@@ -127,6 +127,14 @@ static int apply_meta_fd(const pv_ctx_t *ctx, int fd, const char *path,
 }
 
 /*
+ * Absolute path of cp(1), normally provided by the build system
+ * (-Dcp_path= meson option).  No PATH search at boot.
+ */
+#ifndef PV_CP_PATH
+#define PV_CP_PATH "/bin/cp"
+#endif
+
+/*
  * exec_cp_a -- fork/exec "cp -a <src>/. <dst>" to copy directory contents.
  * Errors from cp are warned but treated as non-fatal (the source directory
  * may have been empty).
@@ -143,7 +151,7 @@ static int exec_cp_a(const char *src, const char *dst)
 		return -1;
 	}
 
-	TRACE("cp -a \"%s\" \"%s\"", src_dot, dst);
+	TRACE("%s -a \"%s\" \"%s\"", PV_CP_PATH, src_dot, dst);
 
 	pid = fork();
 	if (pid == -1) {
@@ -152,8 +160,8 @@ static int exec_cp_a(const char *src, const char *dst)
 	}
 	if (pid == 0) {
 		/* Child */
-		execlp("cp", "cp", "-a", src_dot, dst, (char *)NULL);
-		err(EXIT_FAILURE, "execlp: cp");
+		execl(PV_CP_PATH, "cp", "-a", src_dot, dst, (char *)NULL);
+		err(EXIT_FAILURE, "execl: " PV_CP_PATH);
 	}
 
 	/* Parent */

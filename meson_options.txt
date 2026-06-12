@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0-only
+option('cp_path', type : 'string', value : '',
+  description : 'Absolute path of cp(1) on the target, used for directory migration. Empty (default): <prefix>/<bindir>/cp if that exists on the build machine, otherwise /bin/cp.')

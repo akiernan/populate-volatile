@@ -44,6 +44,29 @@ extra_warnings = cc.get_supported_arguments([
 common_args = posix_args + extra_warnings
 
 # --------------------------------------------------------------------------
+# cp(1) location
+#
+# Directory migration (l-type entries over an existing directory) runs
+# "cp -a" via fork/exec.  The path is baked in at build time so the binary
+# never searches PATH at boot.  -Dcp_path= overrides; the default prefers
+# the configured bindir and falls back to /bin/cp (a valid path on both
+# split-usr and merged-usr layouts).
+# --------------------------------------------------------------------------
+
+fs = import('fs')
+
+cp_path = get_option('cp_path')
+if cp_path == ''
+  bindir_cp = get_option('prefix') / get_option('bindir') / 'cp'
+  cp_path = fs.exists(bindir_cp) ? bindir_cp : '/bin/cp'
+endif
+if not cp_path.startswith('/')
+  error('cp_path must be absolute: ' + cp_path)
+endif
+
+common_args += '-DPV_CP_PATH="' + cp_path + '"'
+
+# --------------------------------------------------------------------------
 # Library: libpv (static)
 # --------------------------------------------------------------------------
 
@@ -127,4 +150,5 @@ endforeach
 summary({
   'description' : 'Set up volatile directories from declarative config at boot or rootfs build time',
   'install dir' : get_option('sbindir'),
+  'cp path'     : cp_path,
 }, section : 'populate-volatile')
