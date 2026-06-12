@@ -39,6 +39,16 @@
  * ---------------------------------------------------------------------- */
 
 /*
+ * Error policy for a failed operation step: fatal at runtime, suppressed
+ * during rootfs construction (do_rootfs must not abort; the target
+ * re-runs the binary at first boot to fix up any gaps).
+ */
+static int op_fail(const pv_ctx_t *ctx)
+{
+	return ctx->rootfs_mode ? 0 : -1;
+}
+
+/*
  * Resolve username -> uid and groupname -> gid via pv_resolve_user /
  * pv_resolve_group (see pv/validate.h for the runtime vs rootfs build-time
  * environment rationale).
@@ -237,7 +247,7 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	if (errno != ENOENT) {
 		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
 		warn("fstatat: %s", entry->name);
-		return ctx->rootfs_mode ? 0 : -1;
+		return op_fail(ctx);
 	}
 	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
 
@@ -274,7 +284,7 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			TRACE("openat source \"%s\" failed: %s",
 			      relsrc, strerror(errno));
 			warn("open source: %s", entry->ltarget);
-			return ctx->rootfs_mode ? 0 : -1;
+			return op_fail(ctx);
 		}
 		fd = openat(ctx->rootfd, relname,
 		            O_WRONLY | O_CREAT | O_EXCL, entry->mode);
@@ -283,14 +293,14 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			      relname, strerror(errno));
 			warn("create: %s", entry->name);
 			close(srcfd);
-			return ctx->rootfs_mode ? 0 : -1;
+			return op_fail(ctx);
 		}
 		if (copy_fd(srcfd, fd) == -1) {
 			TRACE("copy_fd failed: %s", strerror(errno));
 			warn("copy: %s -> %s", entry->ltarget, entry->name);
 			close(srcfd);
 			close(fd);
-			return ctx->rootfs_mode ? 0 : -1;
+			return op_fail(ctx);
 		}
 		close(srcfd);
 		TRACE("copied \"%s\" -> \"%s\"", relsrc, relname);
@@ -302,7 +312,7 @@ int pv_create_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 			TRACE("touch \"%s\" failed: %s",
 			      relname, strerror(errno));
 			warn("touch: %s", entry->name);
-			return ctx->rootfs_mode ? 0 : -1;
+			return op_fail(ctx);
 		}
 		TRACE("touched \"%s\"", relname);
 	}
@@ -338,7 +348,7 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	if (errno != ENOENT) {
 		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
 		warn("fstatat: %s", entry->name);
-		return ctx->rootfs_mode ? 0 : -1;
+		return op_fail(ctx);
 	}
 	TRACE("fstatat(\"%s\") -> ENOENT (will create)", relname);
 
@@ -358,9 +368,7 @@ int pv_mkdir(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	if (fd == -1) {
 		TRACE("pv_mkdirtree_fd(\"%s\") failed", relname);
 		warn("mkdirtree: %s", entry->name);
-		if (!ctx->rootfs_mode)
-			return -1;
-		return 0;
+		return op_fail(ctx);
 	}
 	TRACE("pv_mkdirtree_fd(\"%s\") -> fd=%d", relname, fd);
 
@@ -507,7 +515,7 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	} else if (r == -1) {
 		TRACE("fstatat(\"%s\") failed: %s", relname, strerror(errno));
 		warn("fstatat: %s", entry->name);
-		return ctx->rootfs_mode ? 0 : -1;
+		return op_fail(ctx);
 	} else {
 		/*
 		 * Exists but is not a symlink or directory (e.g. a regular
@@ -519,7 +527,7 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		      (unsigned)((st.st_mode & S_IFMT) >> 12));
 		warnx("link_file: %s exists and is not a directory or symlink",
 		      entry->name);
-		return ctx->rootfs_mode ? 0 : -1;
+		return op_fail(ctx);
 	}
 
 	/* --- Case 3 (after migration) or Case 4: create symlink --- */
@@ -555,7 +563,7 @@ int pv_link_file(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		if (errno == EEXIST && ctx->rootfs_mode)
 			return 0;
 		warn("symlinkat: %s -> %s", entry->name, entry->ltarget);
-		return ctx->rootfs_mode ? 0 : -1;
+		return op_fail(ctx);
 	}
 	TRACE("symlinkat ok");
 
@@ -682,7 +690,7 @@ int pv_apply_entry(const pv_ctx_t *ctx, const pv_entry_t *entry)
 		      e.name);
 		if (pv_readlink_abs(ctx->rootfd, e.name,
 		                    resolved, sizeof(resolved)) == -1)
-			return ctx->rootfs_mode ? 0 : -1;
+			return op_fail(ctx);
 
 		if (ctx->verbose)
 			printf("Found link. Resolved %s -> %s\n",

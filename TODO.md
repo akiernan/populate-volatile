@@ -21,7 +21,6 @@ within each section.
 ## Cleanups / redundant abstractions
 
 - **Repeated idioms in `lib/ops.c`**: the
-  `ctx->rootfs_mode ? 0 : -1` pattern (~8 sites); the
   "fstatat exists -> skip" preamble duplicated between
   `pv_create_file` and `pv_mkdir`; the
   `ltarget[0]=='/' ? +1 : ltarget` strip appears twice.
