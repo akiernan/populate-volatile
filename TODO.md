@@ -60,9 +60,10 @@ within each section.
 
 - `..` traversal behaviour in `pv_resolve_path`/`pv_readlink_abs` -
   pin down whatever the hardening above decides.
-- `discover_cfgfiles` - no unit test (the dead-code bug would have
-  been caught); only indirectly covered by the ordering integration
-  test.
+- `discover_cfgfiles` `DT_UNKNOWN` fallback - the regular-file
+  filter is now integration-tested, but the stat fallback cannot be
+  exercised on tmpfs/ext4; would need extraction from main.c for a
+  unit test.
 
 ## Housekeeping
 
