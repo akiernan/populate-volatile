@@ -72,7 +72,15 @@ static int copy_fd(int srcfd, int dstfd)
 	char buf[65536];
 	ssize_t nr;
 
-	while ((nr = read(srcfd, buf, sizeof(buf))) > 0) {
+	for (;;) {
+		nr = read(srcfd, buf, sizeof(buf));
+		if (nr == 0)
+			break;
+		if (nr == -1) {
+			if (errno == EINTR)
+				continue;
+			return -1;
+		}
 		char *p = buf;
 		ssize_t remaining = nr;
 		while (remaining > 0) {
@@ -86,8 +94,6 @@ static int copy_fd(int srcfd, int dstfd)
 			remaining -= nw;
 		}
 	}
-	if (nr == -1)
-		return -1;
 	return 0;
 }
 

@@ -8,10 +8,6 @@ within each section.
 
 ## Bugs
 
-- **`copy_fd` does not retry `EINTR` on read** (`lib/ops.c`): the
-  comment claims EINTR is handled on both syscalls, but an
-  interrupted `read()` aborts the copy. Wrap the read in the same
-  retry loop the write has.
 - **`main()` always exits `EXIT_SUCCESS`** (`src/main.c`):
   `apply_cb` discards `pv_apply_entry`'s return and nothing
   aggregates failures, so init scripts / do_rootfs cannot detect
