@@ -35,6 +35,7 @@
 static char    tmpbase[PATH_MAX];
 /* tmpbase plus a short suffix: headroom keeps -Wformat-truncation happy */
 static char    dst_full[PATH_MAX + 16];
+static char    dstfile_full[PATH_MAX + 16];
 static int     rootfd = -1;
 static pv_ctx_t ctx;
 
@@ -66,7 +67,22 @@ void setUp(void)
 	    pv_mkdirtree(rootfd, "dst", 0755) == -1)
 		err(1, "pv_mkdirtree");
 
+	/*
+	 * Regular files for the file-bind-mount test.  A file bind mount
+	 * requires the destination to already exist as a regular file, so
+	 * both are created up front.
+	 */
+	int fd = openat(rootfd, "srcfile", O_CREAT | O_WRONLY, 0644);
+	if (fd == -1)
+		err(1, "openat srcfile");
+	close(fd);
+	fd = openat(rootfd, "dstfile", O_CREAT | O_WRONLY, 0644);
+	if (fd == -1)
+		err(1, "openat dstfile");
+	close(fd);
+
 	snprintf(dst_full, sizeof(dst_full), "%s/dst", tmpbase);
+	snprintf(dstfile_full, sizeof(dstfile_full), "%s/dstfile", tmpbase);
 
 	ctx.rootfd      = rootfd;
 	ctx.rootdir     = tmpbase;
@@ -80,6 +96,8 @@ void tearDown(void)
 	/* Detach any bind mount before removing the temp tree. */
 	if (pv_is_mounted(dst_full) == 1)
 		umount2(dst_full, MNT_DETACH);
+	if (pv_is_mounted(dstfile_full) == 1)
+		umount2(dstfile_full, MNT_DETACH);
 
 	if (rootfd != -1) {
 		close(rootfd);
@@ -123,6 +141,51 @@ static void test_bind_mount_idempotent(void)
 	 */
 	TEST_ASSERT_EQUAL_INT(0, umount2(dst_full, MNT_DETACH));
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst_full));
+}
+
+static void test_bind_mount_file_idempotent(void)
+{
+	pv_entry_t e;
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_BIND;
+	strcpy(e.name,    "/dstfile");
+	strcpy(e.ltarget, "/srcfile");
+
+	/*
+	 * A file bind mount (regular file onto regular file) must be detected
+	 * as already-mounted on the second call, exactly like a directory
+	 * mount.  statx() reports STATX_ATTR_MOUNT_ROOT on the file's own
+	 * inode and mountinfo records the file path in field 5, so neither
+	 * detection path depends on the mountpoint being a directory.
+	 */
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted(dstfile_full));
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/*
+	 * If the second call stacked another mount, one umount would leave
+	 * the destination still mounted.
+	 */
+	TEST_ASSERT_EQUAL_INT(0, umount2(dstfile_full, MNT_DETACH));
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dstfile_full));
+}
+
+static void test_is_mounted_mountinfo_file(void)
+{
+	pv_entry_t e;
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_BIND;
+	strcpy(e.name,    "/dstfile");
+	strcpy(e.ltarget, "/srcfile");
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/*
+	 * Pin the mountinfo fallback directly (not just the statx-preferred
+	 * pv_is_mounted) for a file mountpoint: the kernel records the file
+	 * path in field 5 exactly like a directory, so the field-5 comparison
+	 * must match it.
+	 */
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted_mountinfo(dstfile_full));
 }
 
 static void test_is_mounted_via_symlinked_path(void)
@@ -224,6 +287,8 @@ int main(void)
 	UNITY_BEGIN();
 	RUN_TEST(test_bind_mount_creates_mount);
 	RUN_TEST(test_bind_mount_idempotent);
+	RUN_TEST(test_bind_mount_file_idempotent);
+	RUN_TEST(test_is_mounted_mountinfo_file);
 	RUN_TEST(test_is_mounted_via_symlinked_path);
 	RUN_TEST(test_link_file_skips_mounted_dir);
 	RUN_TEST(test_apply_entry_dispatches_bind);
