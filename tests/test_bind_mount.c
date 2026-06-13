@@ -93,11 +93,17 @@ void setUp(void)
 
 void tearDown(void)
 {
-	/* Detach any bind mount before removing the temp tree. */
-	if (pv_is_mounted(dst_full) == 1)
-		umount2(dst_full, MNT_DETACH);
-	if (pv_is_mounted(dstfile_full) == 1)
-		umount2(dstfile_full, MNT_DETACH);
+	/*
+	 * Detach any bind mount before removing the temp tree.  Loop, since a
+	 * test may intentionally stack mounts; one detach would leave a layer
+	 * behind and block pv_rmtree.
+	 */
+	while (pv_is_mounted(dst_full) == 1)
+		if (umount2(dst_full, MNT_DETACH) == -1)
+			break;
+	while (pv_is_mounted(dstfile_full) == 1)
+		if (umount2(dstfile_full, MNT_DETACH) == -1)
+			break;
 
 	if (rootfd != -1) {
 		close(rootfd);
@@ -168,6 +174,48 @@ static void test_bind_mount_file_idempotent(void)
 	 */
 	TEST_ASSERT_EQUAL_INT(0, umount2(dstfile_full, MNT_DETACH));
 	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dstfile_full));
+}
+
+static void test_bind_mount_stacks_on_wrong_source(void)
+{
+	pv_entry_t e;
+	char src_full[sizeof(tmpbase) + 16];
+	char src2_full[sizeof(tmpbase) + 16];
+
+	if (pv_mkdirtree(rootfd, "src2", 0755) == -1)
+		err(1, "pv_mkdirtree src2");
+	snprintf(src_full,  sizeof(src_full),  "%s/src",  tmpbase);
+	snprintf(src2_full, sizeof(src2_full), "%s/src2", tmpbase);
+
+	/* First bind: /src -> /dst */
+	memset(&e, 0, sizeof(e));
+	e.type = PV_TYPE_BIND;
+	strcpy(e.name,    "/dst");
+	strcpy(e.ltarget, "/src");
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/* Re-binding the SAME source is a no-op: it must not stack a layer. */
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/* A DIFFERENT source must NOT be skipped: it stacks on top so the
+	 * intended source becomes visible, matching upstream's unconditional
+	 * mount. */
+	strcpy(e.ltarget, "/src2");
+	TEST_ASSERT_EQUAL_INT(0, pv_bind_mount(&ctx, &e));
+
+	/* Top of the stack now resolves to /src2... */
+	TEST_ASSERT_EQUAL_INT(1, pv_same_inode(dst_full, src2_full));
+
+	/* ...and a single detach reveals /src still mounted underneath,
+	 * proving exactly one extra layer was added (the same-source re-bind
+	 * above added none). */
+	TEST_ASSERT_EQUAL_INT(0, umount2(dst_full, MNT_DETACH));
+	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted(dst_full));
+	TEST_ASSERT_EQUAL_INT(1, pv_same_inode(dst_full, src_full));
+
+	/* Final detach clears the original mount. */
+	TEST_ASSERT_EQUAL_INT(0, umount2(dst_full, MNT_DETACH));
+	TEST_ASSERT_EQUAL_INT(0, pv_is_mounted(dst_full));
 }
 
 static void test_is_mounted_mountinfo_file(void)
@@ -288,6 +336,7 @@ int main(void)
 	RUN_TEST(test_bind_mount_creates_mount);
 	RUN_TEST(test_bind_mount_idempotent);
 	RUN_TEST(test_bind_mount_file_idempotent);
+	RUN_TEST(test_bind_mount_stacks_on_wrong_source);
 	RUN_TEST(test_is_mounted_mountinfo_file);
 	RUN_TEST(test_is_mounted_via_symlinked_path);
 	RUN_TEST(test_link_file_skips_mounted_dir);

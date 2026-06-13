@@ -624,17 +624,32 @@ int pv_bind_mount(const pv_ctx_t *ctx, const pv_entry_t *entry)
 	}
 
 	/*
-	 * Idempotency: if the destination is already a mountpoint, a previous
-	 * run (or the admin) has mounted it; mounting again would stack an
-	 * identical mount on top.  On a mountinfo read error (-1) fall through
-	 * and attempt the mount.
+	 * Idempotency: if the destination is already a mountpoint we only skip
+	 * when it is *our* source.  A bind mount makes the destination resolve
+	 * to the same inode as the source, so matching (st_dev, st_ino) means
+	 * the correct mount is already in place and re-mounting would merely
+	 * stack an identical layer.
+	 *
+	 * If a different source is mounted there, fall through and stack the
+	 * intended bind on top: the upstream script mounts unconditionally, so
+	 * the correct source must end up visible regardless of what is already
+	 * mounted.  On a mountinfo read error (-1) fall through and mount.
 	 */
 	int mounted = pv_is_mounted(fulldst);
 	TRACE("pv_is_mounted(\"%s\") -> %d", fulldst, mounted);
 	if (mounted == 1) {
-		if (ctx->verbose)
-			printf("Already mounted, skipping: %s\n", fulldst);
-		return 0;
+		int same = pv_same_inode(fulldst, fullsrc);
+		TRACE("pv_same_inode(\"%s\", \"%s\") -> %d",
+		      fulldst, fullsrc, same);
+		if (same == 1) {
+			if (ctx->verbose)
+				printf("Already mounted from %s, skipping: %s\n",
+				       fullsrc, fulldst);
+			return 0;
+		}
+		if (ctx->verbose && same == 0)
+			printf("Different source mounted at %s, "
+			       "stacking bind from %s\n", fulldst, fullsrc);
 	}
 
 	if (ctx->dry_run) {

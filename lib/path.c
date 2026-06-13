@@ -700,3 +700,37 @@ int pv_is_mounted(const char *path)
 #endif
 	return pv_is_mounted_mountinfo(path);
 }
+
+/*
+ * pv_same_inode -- do two paths resolve to the same underlying inode?
+ *
+ * A bind mount shares its source's superblock, so a destination that is
+ * already bind-mounted from `b` stats to the same (st_dev, st_ino) as `b`.
+ * Comparing that pair is a path-spelling-independent way to ask "is this
+ * destination already pointing at the intended source?", without parsing
+ * the bind source out of /proc/self/mountinfo.
+ *
+ * Symlinks are followed, matching what the kernel resolves at mount time,
+ * so the comparison reflects what is actually mounted.
+ *
+ * Returns 1 if both stat and share device+inode, 0 if they differ,
+ * -1 if either stat() fails.
+ */
+int pv_same_inode(const char *a, const char *b)
+{
+	struct stat sa, sb;
+
+	if (stat(a, &sa) == -1) {
+		TRACE("stat(\"%s\") failed: %s", a, strerror(errno));
+		return -1;
+	}
+	if (stat(b, &sb) == -1) {
+		TRACE("stat(\"%s\") failed: %s", b, strerror(errno));
+		return -1;
+	}
+
+	int same = (sa.st_dev == sb.st_dev && sa.st_ino == sb.st_ino);
+	TRACE("\"%s\" %s \"%s\" (dev/ino %s)",
+	      a, same ? "==" : "!=", b, same ? "match" : "differ");
+	return same ? 1 : 0;
+}

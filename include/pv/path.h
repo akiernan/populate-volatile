@@ -90,4 +90,12 @@ int pv_is_mounted(const char *path);
  */
 int pv_is_mounted_mountinfo(const char *path);
 
+/*
+ * Do two paths resolve to the same underlying inode (same st_dev+st_ino)?
+ * Symlinks are followed.  Used to tell whether a mountpoint is already
+ * bind-mounted from the intended source.
+ * Returns 1 if same, 0 if different, -1 if either stat() fails.
+ */
+int pv_same_inode(const char *a, const char *b);
+
 #endif /* PV_PATH_H */

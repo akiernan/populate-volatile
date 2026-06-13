@@ -488,6 +488,49 @@ static void test_is_mounted_through_symlink(void)
 	TEST_ASSERT_EQUAL_INT(1, pv_is_mounted_mountinfo(lnk));
 }
 
+static void test_same_inode_identical_path(void)
+{
+	/* A path is trivially the same inode as itself. */
+	TEST_ASSERT_EQUAL_INT(1, pv_same_inode(tmpbase, tmpbase));
+}
+
+static void test_same_inode_hardlink(void)
+{
+	/* Two hard links share one inode. */
+	int fd = openat(tmpfd, "a", O_CREAT | O_WRONLY, 0644);
+	TEST_ASSERT_TRUE(fd != -1);
+	close(fd);
+	TEST_ASSERT_EQUAL_INT(0, linkat(tmpfd, "a", tmpfd, "b", 0));
+
+	char pa[sizeof(tmpbase) + 8], pb[sizeof(tmpbase) + 8];
+	snprintf(pa, sizeof(pa), "%s/a", tmpbase);
+	snprintf(pb, sizeof(pb), "%s/b", tmpbase);
+	TEST_ASSERT_EQUAL_INT(1, pv_same_inode(pa, pb));
+}
+
+static void test_same_inode_distinct_files(void)
+{
+	int fd = openat(tmpfd, "a", O_CREAT | O_WRONLY, 0644);
+	TEST_ASSERT_TRUE(fd != -1);
+	close(fd);
+	fd = openat(tmpfd, "b", O_CREAT | O_WRONLY, 0644);
+	TEST_ASSERT_TRUE(fd != -1);
+	close(fd);
+
+	char pa[sizeof(tmpbase) + 8], pb[sizeof(tmpbase) + 8];
+	snprintf(pa, sizeof(pa), "%s/a", tmpbase);
+	snprintf(pb, sizeof(pb), "%s/b", tmpbase);
+	TEST_ASSERT_EQUAL_INT(0, pv_same_inode(pa, pb));
+}
+
+static void test_same_inode_missing(void)
+{
+	char p[sizeof(tmpbase) + 16];
+	snprintf(p, sizeof(p), "%s/nope", tmpbase);
+	TEST_ASSERT_EQUAL_INT(-1, pv_same_inode(p, tmpbase));
+	TEST_ASSERT_EQUAL_INT(-1, pv_same_inode(tmpbase, p));
+}
+
 /* -------------------------------------------------------------------------
  * Test runner
  * ---------------------------------------------------------------------- */
@@ -532,6 +575,10 @@ int main(void)
 	RUN_TEST(test_is_mounted_not_mounted);
 	RUN_TEST(test_is_mounted_mountinfo_fallback);
 	RUN_TEST(test_is_mounted_through_symlink);
+	RUN_TEST(test_same_inode_identical_path);
+	RUN_TEST(test_same_inode_hardlink);
+	RUN_TEST(test_same_inode_distinct_files);
+	RUN_TEST(test_same_inode_missing);
 
 	return UNITY_END();
 }

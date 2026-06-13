@@ -48,7 +48,10 @@ over an existing regular file now matches upstream's `ln -sf`
   /proc/mounts (no \NNN unescaping, no canonicalisation); we use
   statx(STATX_ATTR_MOUNT_ROOT) with a realpath+mountinfo fallback.
 - **Bind mounts**: upstream stacks a duplicate mount per run; ours
-  are idempotent.
+  skip when the destination is already bind-mounted from the intended
+  source (same st_dev/st_ino), but still stack when a *different*
+  source is mounted there, so the requested source always ends up
+  visible as upstream guarantees.
 - **Directory migration**: upstream's `cp -a $d/* $d/.[!.]*` misses
   dotfiles beginning with two dots; `cp -a src/.` does not.
 - **Parse strictness**: modes must be octal (upstream accepted
